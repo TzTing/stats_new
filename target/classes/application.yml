@@ -1,0 +1,51 @@
+server:
+  port: 9898
+
+spring:
+  datasource:
+    primary:
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      jdbc-url: jdbc:sqlserver://localhost;DataBaseName=analysis_szqc_nb_new
+      username: sa
+      password: gzbright38259201
+
+    second:
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      jdbc-url: jdbc:sqlserver://localhost;DataBaseName=zcjy_hzq
+      username: sa
+      password: gzbright38259201
+
+  jpa:
+    show-sql: true
+    hibernate:
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+
+
+#客户端地址
+app:
+  server:
+    host:
+      url: http://localhost:9898
+  login:
+    url: /login
+  logout:
+    url: /logout
+
+  #前端首页地址
+  home:
+    url: http://localhost:9898/doc.html
+
+#cas认证中心地址
+cas:
+  server:
+    host: http://localhost:8080/cas
+    login_url: http://localhost:8080/cas/login
+    logout_url: http://localhost:8080/cas/logout?service=http://localhost:9898/apis/login
+
+stats:
+  asset-database: analysis_szqc2021
+
+logging:
+  level:
+    org.hibernate.type.descriptor.sql.BasicBinder: trace

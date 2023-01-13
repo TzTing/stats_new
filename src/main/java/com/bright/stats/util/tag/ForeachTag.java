@@ -2,11 +2,13 @@ package com.bright.stats.util.tag;
 
 import com.bright.stats.util.ExcelParserPOI;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
+import org.springframework.stereotype.Component;
 
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+@Component
 public class ForeachTag implements ITag{
 
 

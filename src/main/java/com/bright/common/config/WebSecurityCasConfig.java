@@ -1,8 +1,12 @@
 package com.bright.common.config;
 
+import com.bright.common.handler.CasAuthenticationSuccessHandler;
+import com.bright.common.handler.LogoutRemoveUserHandler;
 import com.bright.common.properties.CasProperties;
 import com.bright.common.security.CasAuthenticationEntryPointImpl;
+import com.bright.common.security.CasSessionAuthenticationStrategy;
 import com.bright.common.security.CasUserDetailsServiceImpl;
+import com.bright.common.security.OnlineUserFilter;
 import org.jasig.cas.client.session.SingleSignOutFilter;
 import org.jasig.cas.client.validation.Cas20ServiceTicketValidator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,11 +21,22 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.core.GrantedAuthorityDefaults;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
+import org.springframework.security.web.authentication.logout.LogoutHandler;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionFixationProtectionStrategy;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 
 /**
  * @Author txf
@@ -49,7 +64,7 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
         http.authorizeRequests() //配置安全策略
                 .antMatchers("/login", "/send").permitAll()
                 .antMatchers("/static/**").permitAll()
-                .antMatchers("/**").permitAll()
+//                .antMatchers("/**").permitAll()
                 .anyRequest().authenticated() //所有请求都要验证
                 .and()
                 .csrf().disable()
@@ -63,8 +78,31 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
         http.exceptionHandling().authenticationEntryPoint(casAuthenticationEntryPoint)
                 .and()
                 .addFilter(casAuthenticationFilter())
+                .addFilterAfter(onlineUserFilter(), UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(casLogoutFilter(), LogoutFilter.class)
                 .addFilterBefore(singleSignOutFilter(), CasAuthenticationFilter.class);
+
+
+
+        //退出登录
+        /*http.logout().logoutUrl("logout.do")
+                .logoutSuccessUrl("/login")
+                .logoutRequestMatcher(new AntPathRequestMatcher("/logout.do", "GET"))
+                .logoutSuccessHandler(new LogoutSuccessHandler() {
+                    @Override
+                    public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+                        // System.out.println("onLogoutSuccess");
+                        response.sendRedirect("logout.html");
+                    }
+                })
+                .addLogoutHandler(new LogoutHandler() {
+                    @Override
+                    public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
+                        System.out.println("logout");
+                    }
+                })
+                .invalidateHttpSession(true)
+                .deleteCookies("token_token");*/
     }
 
 
@@ -89,7 +127,7 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
         casAuthenticationFilter.setServiceProperties(serviceProperties());
         casAuthenticationFilter.setFilterProcessesUrl(casProperties.getAppLoginUrl());
         casAuthenticationFilter.setAuthenticationManager(authenticationManager());
-        casAuthenticationFilter.setAuthenticationSuccessHandler(new SimpleUrlAuthenticationSuccessHandler(casProperties.getAppHomeUrl()));
+        casAuthenticationFilter.setAuthenticationSuccessHandler(new CasAuthenticationSuccessHandler(casProperties.getAppHomeUrl()));
         casAuthenticationFilter.setSessionAuthenticationStrategy(sessionAuthenticationStrategy());
         return casAuthenticationFilter;
     }
@@ -113,7 +151,7 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
 
     @Bean
     public SessionAuthenticationStrategy sessionAuthenticationStrategy() {
-        SessionAuthenticationStrategy sessionAuthenticationStrategy = new SessionFixationProtectionStrategy();
+        CasSessionAuthenticationStrategy sessionAuthenticationStrategy = new CasSessionAuthenticationStrategy();
         return sessionAuthenticationStrategy;
     }
 
@@ -126,10 +164,22 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
 
     @Bean
     public LogoutFilter casLogoutFilter() {
-        LogoutFilter logoutFilter = new LogoutFilter(casProperties.getCasServerLogoutUrl(),
-                new SecurityContextLogoutHandler());
+        LogoutFilter logoutFilter = new LogoutFilter(casProperties.getCasServerLogoutUrl() + "?service=" + casProperties.getAppHomeUrl(),
+                new SecurityContextLogoutHandler(), logoutRemoveUserHandler());
         logoutFilter.setFilterProcessesUrl(casProperties.getAppLogoutUrl());
         return logoutFilter;
+    }
+
+    @Bean
+    public OnlineUserFilter onlineUserFilter() {
+        OnlineUserFilter onlineUserFilter = new OnlineUserFilter(casProperties);
+        return onlineUserFilter;
+    }
+
+    @Bean
+    public LogoutRemoveUserHandler logoutRemoveUserHandler() {
+        LogoutRemoveUserHandler logoutRemoveUserHandler = new LogoutRemoveUserHandler();
+        return logoutRemoveUserHandler;
     }
 
     @Bean

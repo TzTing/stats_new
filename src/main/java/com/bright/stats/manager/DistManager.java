@@ -1,5 +1,7 @@
 package com.bright.stats.manager;
 
+import com.bright.stats.pojo.po.primary.Dist;
+import com.bright.stats.pojo.vo.DistAdapterVO;
 import com.bright.stats.pojo.vo.DistVO;
 
 import java.util.List;
@@ -37,4 +39,46 @@ public interface DistManager {
      * @return 地区集合
      */
     List<DistVO> listDistForList(Integer years, String userDistNo, String distNo, Integer distNoLength);
+
+
+    /**
+     * 获取地区最大级别
+     * @return
+     */
+    List<Integer> getDistAllGrade();
+
+    /**
+     * 根据年份和地区编号获取地区
+     * @param years 年份
+     * @param distNo 地区编号
+     * @return
+     */
+    Dist getDistByYearAndDistNo(Integer years, String distNo);
+
+    /**
+     * 按年份和用户关联地区编号和地区编号获取地区集合
+     * @param years 年份
+     * @param userDistNo 用户关联地区编号
+     * @param distNo 地区编号
+     * @param distNoLength 地区编号长度
+     * @return 地区集合
+     */
+    List<DistAdapterVO> listAdapterDistForList(Integer years, String userDistNo, String distNo, Integer distNoLength);
+
+    /**
+     * 获取当前地区的最大长度
+     * @param distNo
+     * @param years
+     * @return
+     */
+    int getCurrMaxDistNoLength(String distNo, Integer years);
+
+
+    /**
+     * 获取当前地区的最大长度
+     * @param distNo
+     * @param years
+     * @return
+     */
+    String getDistFullName(String distNo, Integer years);
 }

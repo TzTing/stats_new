@@ -59,4 +59,7 @@ public class TableType implements Serializable {
     @Column(name = "editSumOrder")
     private Integer editSumOrder;
 
+    @Column(name = "curNewYear")
+    private Integer curNewYear;
+
 }

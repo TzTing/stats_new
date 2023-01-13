@@ -1,9 +1,12 @@
 package com.bright.stats.service;
 
 import com.bright.common.result.PageResult;
+import com.bright.stats.pojo.dto.ExportExcelStatisticsCenterDTO;
 import com.bright.stats.pojo.model.TableHeader;
+import com.bright.stats.pojo.po.primary.FileList;
 import com.bright.stats.pojo.query.StatisticsCenterQuery;
 
+import javax.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Map;
 
@@ -30,4 +33,20 @@ public interface StatisticsCenterService {
      * @return 表数据
      */
     PageResult<Map<String, Object>> listTableDataForPage(StatisticsCenterQuery statisticsCenterQuery);
+
+    /**
+     * 获取统计表的表信息
+     * @param typeCode
+     * @param years
+     * @param months
+     * @return
+     */
+    List<FileList> listStatisticsTables(String typeCode, Integer years, Integer months);
+
+    /**
+     * 导出统计数据
+     * @param exportExcelStatisticsCenterDTO
+     * @param response
+     */
+    void exportExcel(ExportExcelStatisticsCenterDTO exportExcelStatisticsCenterDTO, HttpServletResponse response);
 }

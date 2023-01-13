@@ -3,8 +3,12 @@ package com.bright.stats.web.controller;
 import com.bright.common.result.PageResult;
 import com.bright.common.result.Result;
 import com.bright.common.util.SecurityUtil;
+import com.bright.stats.constant.RocketConstant;
+import com.bright.stats.mq.RocketProduceService;
 import com.bright.stats.pojo.dto.*;
 import com.bright.stats.pojo.model.TableHeader;
+import com.bright.stats.pojo.po.primary.FileList;
+import com.bright.stats.pojo.po.primary.MqMessage;
 import com.bright.stats.pojo.po.primary.TableType;
 import com.bright.stats.pojo.po.primary.UploadBase;
 import com.bright.stats.pojo.po.second.User;
@@ -20,12 +24,17 @@ import net.sf.excelutils.ExcelException;
 import net.sf.excelutils.ExcelUtils;
 import net.sf.json.JSONObject;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.CollectionUtils;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -41,14 +50,18 @@ import java.util.*;
 @Api(tags = "基础数据处理接口")
 @RestController
 @RequestMapping("/baseData")
+@Validated
 @RequiredArgsConstructor
 public class BaseDataController {
 
+    private final RocketProduceService rocketProduceService;
     private final BaseDataService baseDataService;
 
     @ApiOperation(value = "获取基础数据表内公式")
     @GetMapping("/ruleInner/list")
-    public Result listRuleInners(String tableName, Integer years, Integer months) {
+    public Result listRuleInners(@NotBlank(message = "表名不能为空") String tableName
+            , @NotNull(message = "年份不能为空") Integer years
+            , @NotNull(message = "月份不能为空") Integer months) {
         User loginUser = SecurityUtil.getLoginUser();
         String typeCode = loginUser.getTableType().getTableType();
         String userDistNo = loginUser.getTjDistNo();
@@ -58,7 +71,9 @@ public class BaseDataController {
 
     @ApiOperation(value = "获取基础数据表头")
     @GetMapping("/tableHeader/list")
-    public Result listTableHeaders(String tableName, Integer years, Integer months) {
+    public Result listTableHeaders(@NotBlank(message = "表名不能为空") String tableName
+            , @NotNull(message = "年份不能为空") Integer years
+            , @NotNull(message = "月份不能为空") Integer months) {
         User loginUser = SecurityUtil.getLoginUser();
         String typeCode = loginUser.getTableType().getTableType();
         String userDistNo = loginUser.getTjDistNo();
@@ -68,7 +83,7 @@ public class BaseDataController {
 
     @ApiOperation(value = "分页获取基础表数据")
     @PostMapping("/tableData/page")
-    public Result listTableDataForPage(@RequestBody BaseDataQuery baseDataQuery) {
+    public Result listTableDataForPage(@RequestBody @Validated BaseDataQuery baseDataQuery) {
         User loginUser = SecurityUtil.getLoginUser();
         String typeCode = loginUser.getTableType().getTableType();
         baseDataQuery.setTypeCode(typeCode);
@@ -77,32 +92,131 @@ public class BaseDataController {
         return Result.success(mapPageResult);
     }
 
+    @PreAuthorize("hasAnyAuthority('baseData:maintenanceData')")
     @ApiOperation(value = "保存基础表数据")
     @PostMapping("/tableData/save")
-    public Result saveTableData(@RequestBody TableDataDTO tableDataDTO) {
+    public Result saveTableData(@Validated @RequestBody TableDataDTO tableDataDTO) {
         User loginUser = SecurityUtil.getLoginUser();
         String typeCode = loginUser.getTableType().getTableType();
         tableDataDTO.setTypeCode(typeCode);
-        baseDataService.saveTableData(tableDataDTO);
+        tableDataDTO.setUsername(loginUser.getUsername());
+
+        try{
+            MqMessagesDTO mqMessagesDTO = new MqMessagesDTO();
+            mqMessagesDTO.setUsername(tableDataDTO.getUsername());
+            mqMessagesDTO.setDistNo(tableDataDTO.getDistNo());
+            mqMessagesDTO.setTypeCode(tableDataDTO.getTypeCode());
+            mqMessagesDTO.setYears(tableDataDTO.getYears());
+            mqMessagesDTO.setMonths(tableDataDTO.getMonths());
+
+
+            //检查正在运行或待运行的任务
+            baseDataService.checkRuningAll(mqMessagesDTO);
+        }catch (Exception e){
+            return Result.fail(e.getMessage());
+        }
+
+        try{
+            baseDataService.saveTableData(tableDataDTO);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.fail("保存失败！");
+        }
+
+
         return Result.success();
     }
 
+    @PreAuthorize("hasAnyAuthority('baseData:menusum')")
     @ApiOperation(value = "汇总基础数据")
     @PostMapping("/summary")
     public Result summary(@RequestBody SummaryDTO summaryDTO) {
         TableType tableType = SecurityUtil.getLoginUser().getTableType();
         summaryDTO.setTypeCode(tableType.getTableType());
-        SummaryVO summaryVO = baseDataService.summary(summaryDTO);
+        summaryDTO.setUserDistNo(SecurityUtil.getLoginUser().getTjDistNo());
+
+        MqMessagesDTO mqMessagesDTO = new MqMessagesDTO();
+        mqMessagesDTO.setTopicType(RocketConstant.TOPIC_SUMMARY);
+        mqMessagesDTO.setYears(summaryDTO.getYears());
+        mqMessagesDTO.setMonths(summaryDTO.getMonths());
+        mqMessagesDTO.setDistNo(summaryDTO.getDistNo());
+        mqMessagesDTO.setTypeCode(tableType.getTableType());
+        mqMessagesDTO.setUsername(SecurityUtil.getLoginUser().getUsername());
+
+//        Boolean checkFlag = baseDataService.checkRunningByDist(mqMessagesDTO);
+//        if(!checkFlag){
+//            return Result.fail("当前有汇总操作在执行中，请等执行完成后再进行操作。详情请查看任务列表。");
+//        }
+
+        Boolean checkFlag = baseDataService.checkRunning(mqMessagesDTO);
+        if(!checkFlag){
+            return Result.fail("当前有汇总操作在执行中，请等执行完成后再进行操作。详情请查看任务列表。");
+        }
+
+        MqMessage<SummaryDTO> mqMessage = new MqMessage();
+        mqMessage.setKeyword(SecurityUtil.getLoginUser().getUsername() + "_" + UUID.randomUUID().toString());
+        mqMessage.setTopicType(RocketConstant.TOPIC_SUMMARY);
+        mqMessage.setUsername(SecurityUtil.getLoginUser().getUsername());
+        mqMessage.setYears(summaryDTO.getYears());
+        mqMessage.setMonths(summaryDTO.getMonths());
+        mqMessage.setDistNo(summaryDTO.getDistNo());
+        mqMessage.setReadFlag(false);
+        mqMessage.setTypeCode(tableType.getTableType());
+        mqMessage.setConsumerFlag(RocketConstant.CONSUMER_FLAG_TODO);
+        mqMessage.setData(summaryDTO);
+        rocketProduceService.sendMessage(mqMessage);
+
+//        SummaryVO summaryVO = baseDataService.summary(summaryDTO);
+        SummaryVO summaryVO = new SummaryVO();
+
         return Result.success(summaryVO);
     }
 
-    @CrossOrigin
+
+    @PreAuthorize("hasAnyAuthority('baseData:btncheck')")
     @ApiOperation(value = "稽核基础数据")
     @PostMapping("/check")
     public Result check(@RequestBody CheckDTO checkDTO) {
         TableType tableType = SecurityUtil.getLoginUser().getTableType();
         checkDTO.setTypeCode(tableType.getTableType());
-        List<CheckVO> checkVOS = baseDataService.check(checkDTO);
+        checkDTO.setUserDistNo(SecurityUtil.getLoginUser().getTjDistNo());
+
+        checkDTO.setTableType(tableType);
+
+        MqMessagesDTO mqMessagesDTO = new MqMessagesDTO();
+        mqMessagesDTO.setTopicType(RocketConstant.TOPIC_CHECK);
+        mqMessagesDTO.setYears(checkDTO.getYears());
+        mqMessagesDTO.setMonths(checkDTO.getMonths());
+        mqMessagesDTO.setDistNo(checkDTO.getDistNo());
+        mqMessagesDTO.setTypeCode(tableType.getTableType());
+        mqMessagesDTO.setUsername(SecurityUtil.getLoginUser().getUsername());
+
+//        Boolean checkFlag = baseDataService.checkRunningByDist(mqMessagesDTO);
+        Boolean checkFlag = baseDataService.checkRunning(mqMessagesDTO);
+
+        if(!checkFlag){
+            List<CheckVO> checkVOS = new ArrayList<>();
+            return Result.fail("当前有稽核操作在执行中，请等执行完成后再进行操作。详情请查看任务列表。");
+        }
+
+        MqMessage<CheckDTO> mqMessage = new MqMessage();
+        mqMessage.setKeyword(SecurityUtil.getLoginUser().getUsername() + "_" + UUID.randomUUID().toString());
+
+        mqMessage.setTopicType(RocketConstant.TOPIC_CHECK);
+        mqMessage.setUsername(SecurityUtil.getLoginUser().getUsername());
+        mqMessage.setYears(checkDTO.getYears());
+        mqMessage.setMonths(checkDTO.getMonths());
+        mqMessage.setDistNo(checkDTO.getDistNo());
+        mqMessage.setReadFlag(false);
+        mqMessage.setTypeCode(tableType.getTableType());
+        mqMessage.setConsumerFlag(RocketConstant.CONSUMER_FLAG_TODO);
+        mqMessage.setData(checkDTO);
+        rocketProduceService.sendMessage(mqMessage);
+
+//        rocketMQTemplate.convertAndSend(RocketConstant.TOPIC_CHECK, mqMessage);
+
+//        List<CheckVO> checkVOS = baseDataService.check(checkDTO);
+        List<CheckVO> checkVOS = new ArrayList<>();
         return Result.success(checkVOS);
     }
 
@@ -118,11 +232,58 @@ public class BaseDataController {
         return Result.success(pageResult);
     }
 
+    @PreAuthorize("hasAnyAuthority('baseData:btnsealData')")
     @ApiOperation(value = "上报或退回单位数据")
     @PostMapping("/reportOrWithdraw")
-    public Result reportOrWithdraw(String dpName, String keyword) {
+    public Result reportOrWithdraw(@RequestBody ReportDTO reportDTO) {
         User user = SecurityUtil.getLoginUser();
-        List<String> result = baseDataService.reportOrWithdraw(dpName, keyword, user);
+
+        reportDTO.setUser(user);
+
+        MqMessagesDTO mqMessagesDTO = new MqMessagesDTO();
+
+        if("待办事项_上报".equals(reportDTO.getDpName())){
+            mqMessagesDTO.setTopicType(RocketConstant.TOPIC_REPORT);
+        }else{
+            mqMessagesDTO.setTopicType(RocketConstant.TOPIC_WITHDRAW);
+        }
+        mqMessagesDTO.setYears(reportDTO.getYears());
+        mqMessagesDTO.setMonths(reportDTO.getMonths());
+        mqMessagesDTO.setDistNo(reportDTO.getKeyword().split("_")[1]);
+        mqMessagesDTO.setTypeCode(user.getTableType().getTableType());
+        mqMessagesDTO.setUsername(SecurityUtil.getLoginUser().getUsername());
+
+//        Boolean checkFlag = baseDataService.checkRunningByDist(mqMessagesDTO);
+//        if(!checkFlag){
+//            return Result.fail("当前有上报或退回操作在执行中，请等执行完成后再进行操作。详情请查看任务列表。");
+//        }
+
+        Boolean checkFlag = baseDataService.checkRunning(mqMessagesDTO);
+        if(!checkFlag){
+            return Result.fail("当前有上报或退回操作在执行中，请等执行完成后再进行操作。详情请查看任务列表。");
+        }
+
+        MqMessage<ReportDTO> mqMessage = new MqMessage();
+        mqMessage.setKeyword(SecurityUtil.getLoginUser().getUsername() + "_" + UUID.randomUUID().toString());
+
+        if("待办事项_上报".equals(reportDTO.getDpName())){
+            mqMessage.setTopicType(RocketConstant.TOPIC_REPORT);
+        }else{
+            mqMessage.setTopicType(RocketConstant.TOPIC_WITHDRAW);
+        }
+
+        mqMessage.setUsername(SecurityUtil.getLoginUser().getUsername());
+        mqMessage.setYears(user.getTableType().getCurNewYear());
+        mqMessage.setMonths(user.getTableType().getCurMonth());
+        mqMessage.setTypeCode(user.getTableType().getTableType());
+        mqMessage.setDistNo(reportDTO.getKeyword().split("_")[1]);
+        mqMessage.setReadFlag(false);
+        mqMessage.setConsumerFlag(RocketConstant.CONSUMER_FLAG_TODO);
+        mqMessage.setData(reportDTO);
+        rocketProduceService.sendMessage(mqMessage);
+//        List<String> result = baseDataService.reportOrWithdraw(dpName, keyword, user);
+        List<String> result = new ArrayList<>();
+//        List<InteractiveVO> result = baseDataService.reportOrWithdraw(dpName, keyword, user);
         return Result.success(result);
     }
 
@@ -132,20 +293,40 @@ public class BaseDataController {
         User loginUser = SecurityUtil.getLoginUser();
         String typeCode = loginUser.getTableType().getTableType();
         String username = loginUser.getUsername();
+        String userDistNo = loginUser.getTjDistNo();
         if (!isSuperTemplate) {
             typeCode = tableName;
         }
-        List<ExcelTemplateVO> excelTemplateVOS = baseDataService.listExcelTemplates(years, typeCode, username);
+        List<ExcelTemplateVO> excelTemplateVOS = baseDataService.listExcelTemplates(years, typeCode, username, userDistNo);
         return Result.success(excelTemplateVOS);
     }
 
+    @PreAuthorize("hasAnyAuthority('baseData:menuExport')")
     @ApiOperation(value = "按excel模板导出数据")
     @PostMapping("/exportExcelByTemplate")
     public void exportExcelByTemplate(@RequestBody ExportExcelDTO exportExcelDTO, HttpServletResponse response) {
         String typeCode = SecurityUtil.getLoginUser().getTableType().getTableType();
         exportExcelDTO.setTypeCode(typeCode);
+        exportExcelDTO.setUserDistNo(SecurityUtil.getLoginUser().getTjDistNo());
         ExportExcelVO exportExcelVO = baseDataService.exportExcelByTemplate(exportExcelDTO);
+
+        if(!CollectionUtils.isEmpty(exportExcelVO.getData())){
+            Map<String, Object> data = exportExcelVO.getData();
+            for (String temp : data.keySet()) {
+                List<Map<String,Object>> mapList = (List<Map<String, Object>>) data.get(temp);
+                for(Map<String, Object> tempMap : mapList){
+                    for (String keyTemp : tempMap.keySet()){
+                        if(Objects.isNull(tempMap.get(keyTemp))){
+                            tempMap.put(keyTemp, "");
+                        }
+                    }
+                }
+            }
+        }
+
+
         JSONObject jsonObject = JSONObject.fromObject(exportExcelVO);
+
         for (Object o : jsonObject.keySet()) {
             ExcelUtils.addValue(o.toString(), jsonObject.get(o));
         }
@@ -180,6 +361,8 @@ public class BaseDataController {
         baseDataService.exportExcelByTemplateAndTag(exportExcelTagDTO, request, response);
     }
 
+
+    @PreAuthorize("hasAnyAuthority('baseData:menuImport')")
     @ApiOperation(value = "按excel模板导入数据")
     @PostMapping(value = "/importExcelByTemplate")
     public Result importExcelByTemplate(ImportExcelDTO importExcelDTO, MultipartFile importExcelFile) {
@@ -192,6 +375,8 @@ public class BaseDataController {
         String filePath = importExcelDTO.getFilePath();
         String rootPath = ClassUtils.getDefaultClassLoader().getResource("static/").getPath();
         TableType tableType = SecurityUtil.getLoginUser().getTableType();
+        User user = SecurityUtil.getLoginUser();
+
 
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
         String format = simpleDateFormat.format(new Date());
@@ -218,6 +403,23 @@ public class BaseDataController {
         Integer successRows = 0;
         Integer errorRows = 0;
         List<ImportExcelVO> list = null;
+
+        //校验是否有真正执行或者待执行的任务
+        MqMessagesDTO mqMessagesDTO = new MqMessagesDTO();
+        mqMessagesDTO.setUsername(user.getUsername());
+        mqMessagesDTO.setDistNo(importExcelDTO.getDistNo());
+        mqMessagesDTO.setTypeCode(tableType.getTableType());
+        mqMessagesDTO.setYears(importExcelDTO.getYears());
+        mqMessagesDTO.setMonths(importExcelDTO.getMonths());
+
+        try {
+            baseDataService.checkRuningAll(mqMessagesDTO);
+        } catch (Exception e){
+            return Result.fail(e.getMessage());
+        }
+
+
+
         Map<String, Object> reInfo = baseDataService.importExcelByTemplate(tableType, excelTemplateId, rootPath, newFilename, distNo, years, months);
         if (null != reInfo) {
             list = (List<ImportExcelVO>) reInfo.get("importExcel");
@@ -254,5 +456,31 @@ public class BaseDataController {
         String typeCode = SecurityUtil.getLoginUser().getTableType().getTableType();
         Map<String, Object> map = baseDataService.getPreviousYearData(typeCode, tableName, years, months, paramJson);
         return Result.success(map);
+    }
+
+
+    @ApiOperation(value = "获取基础表信息")
+    @GetMapping("/baseTable/list")
+    public Result listBaseTables(Integer years, Integer months){
+        String typeCode = SecurityUtil.getLoginUser().getTableType().getTableType();
+        List<FileList> baseTables = baseDataService.listBaseTables(typeCode, years, months);
+        return Result.success(baseTables);
+    }
+
+
+    @ApiOperation(value = "获取地区所有级别")
+    @GetMapping("/allDistGrade")
+    public Result getDistAllGrade(){
+        List<Integer> distAllGrade = baseDataService.getDistAllGrade();
+        return Result.success(distAllGrade);
+    }
+
+
+    @PreAuthorize("hasAnyAuthority('baseData:initUploadData')")
+    @ApiOperation(value = "同步上报数据")
+    @PostMapping("/initUploadData")
+    public Result initUploadData(@RequestBody InitUploadDataDTO initUploadDataDTO){
+        Boolean res = baseDataService.initUploadData(initUploadDataDTO);
+        return Result.success(res);
     }
 }

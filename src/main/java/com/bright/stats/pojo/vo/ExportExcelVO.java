@@ -25,6 +25,7 @@ public class ExportExcelVO implements Serializable {
     private String curday;
     private Map<String, Object> data;
 
+
     private String excelTemplatePath;
     private String fileName;
 }

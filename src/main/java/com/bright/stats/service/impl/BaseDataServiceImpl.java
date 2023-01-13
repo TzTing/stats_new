@@ -3,7 +3,6 @@ package com.bright.stats.service.impl;
 import com.bright.common.pojo.query.Condition;
 import com.bright.common.result.PageResult;
 import com.bright.common.util.AssertUtil;
-import com.bright.common.util.SecurityUtil;
 import com.bright.stats.constant.FileListConstant;
 import com.bright.stats.manager.*;
 import com.bright.stats.pojo.dto.*;
@@ -15,23 +14,34 @@ import com.bright.stats.pojo.query.ExistDataQuery;
 import com.bright.stats.pojo.query.UploadBaseQuery;
 import com.bright.stats.pojo.vo.*;
 import com.bright.stats.service.BaseDataService;
+import com.bright.stats.util.Common;
 import com.bright.stats.util.DataConstants;
 import com.bright.stats.util.ExcelUtilPOI;
+import com.bright.stats.util.ReplaceSqlUtil;
 import com.bright.stats.web.websocket.WebSocket;
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import lombok.RequiredArgsConstructor;
 import net.sf.excelutils.ExcelException;
 import net.sf.json.JSONObject;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * @Author txf
@@ -42,6 +52,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class BaseDataServiceImpl implements BaseDataService {
 
+
+    private final RestTemplate restTemplate;
     private final WebSocket webSocket;
     private final JdbcTemplate jdbcTemplatePrimary;
     private final BaseDataManager baseDataManager;
@@ -49,6 +61,8 @@ public class BaseDataServiceImpl implements BaseDataService {
     private final UploadBaseManager uploadBaseManager;
     private final DataProcessNewManager dataProcessNewManager;
     private final ExcelTemplateManager excelTemplateManager;
+    private final MqMessageManager mqMessageManager;
+    private final DistManager distManager;
 
     @Override
     public List<RuleInnerVO> listRuleInners(String typeCode, String tableName, Integer years, Integer months, String userDistNo) {
@@ -90,6 +104,12 @@ public class BaseDataServiceImpl implements BaseDataService {
     }
 
     @Override
+    public SummaryVO summaryCodingRun(SummaryDTO summaryDTO) {
+        SummaryVO summaryVO = baseDataManager.summaryCodingRun(summaryDTO);
+        return summaryVO;
+    }
+
+    @Override
     public List<CheckVO> check(CheckDTO checkDTO) {
         Integer years = checkDTO.getYears();
         Integer months = checkDTO.getMonths();
@@ -101,11 +121,19 @@ public class BaseDataServiceImpl implements BaseDataService {
         Boolean isAllDist = checkDTO.getIsAllDist();
         Boolean isSb = checkDTO.getIsSb();
         Boolean isGrade = checkDTO.getIsGrade();
-        TableType tableType = SecurityUtil.getLoginUser().getTableType();
+        TableType tableType = checkDTO.getTableType();
         String userDistNo = checkDTO.getUserDistNo();
 
 
-        List<FileList> fileLists = fileListManager.listFileLists(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, userDistNo);
+        List<FileList> fileLists = new ArrayList<>();
+
+        //如果指定了表  则稽核单表
+        if(StringUtils.isNotBlank(tableName)){
+            fileLists.add(fileListManager.getFileList(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, tableName, years, months, userDistNo));
+        } else {
+            fileLists = fileListManager.listFileLists(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, userDistNo);
+        }
+
         List<CheckVO> checkVOS = new ArrayList<>();
 
 //        BigDecimal fileListSize = BigDecimal.valueOf(fileLists.size());
@@ -127,20 +155,35 @@ public class BaseDataServiceImpl implements BaseDataService {
         return uploadBaseManager.listUploadBaseForPage(uploadBaseQuery);
     }
 
+    @Transactional(rollbackFor = Throwable.class)
     @Override
-    public List<String> reportOrWithdraw(String dpName, String keyword, User user) {
+    public List<InteractiveVO> reportOrWithdraw(String dpName, String keyword, User user) {
         String tableType = user.getTableType().getTableType();
-        String userDistNo = user.getDistNo();
+        String userDistNo = user.getTjDistNo();
         String username = user.getUsername();
+
+        List<InteractiveVO> interactiveVOS = new ArrayList<>();
+
         List<DataProcessNew> dataProcessNews = dataProcessNewManager.listDataProcessNews(dpName, tableType, -1);
+
+        if(CollectionUtils.isEmpty(dataProcessNews)){
+            throw new RuntimeException("没有配置dataProcess");
+        }
+
         for (DataProcessNew dataProcessNew : dataProcessNews) {
             if (dataProcessNew.getAlertType() == 1 || dataProcessNew.getAlertType() == 0) {
                 String processSql = dataProcessNew.getProcessSql();
                 String alertSql = dataProcessNew.getAlert();
 
+                String fileListSql = " (select * from filelist where 1 = 1 " +
+                        " and (belongDistNo like '{userDistNo}%' or '${userDistNo}' like belongDistNo+'%') ) filelist";
+
+                fileListSql = fileListSql.replace("{userDistNo}", userDistNo);
+
                 processSql = processSql.replace("${keyword}", keyword);
                 processSql = processSql.replace("${_udistNo}", userDistNo);
                 processSql = processSql.replace("${writer}", username);
+                processSql = processSql.replace("${filelist}", fileListSql);
 
                 List<Map<String, Object>> maps = null;
                 if (dataProcessNew.getIsAlert()) {
@@ -151,15 +194,117 @@ public class BaseDataServiceImpl implements BaseDataService {
                         alertSql = alertSql.replace("${keyword}", keyword);
                         alertSql = alertSql.replace("${_udistNo}", userDistNo);
                         alertSql = alertSql.replace("${writer}", username);
+                        alertSql = alertSql.replace("${filelist}", fileListSql);
 
                         List<String> strings = jdbcTemplatePrimary.queryForList(alertSql, String.class);
                         if (!CollectionUtils.isEmpty(strings)) {
-                            System.out.println(strings.get(0));
-                            return strings;
+
+                            for(String str : strings){
+                                InteractiveVO temp = new InteractiveVO();
+                                temp.setSbFlag(false);
+                                temp.setWindowType(1);
+                                temp.setWindowInfo(str);
+                                interactiveVOS.add(temp);
+                            }
+
+                            return interactiveVOS;
                         }
                     }
                 } else {
-                    jdbcTemplatePrimary.execute(processSql);
+//                    jdbcTemplatePrimary.execute(processSql);
+                    String[] idAndDistNo = keyword.split("_");
+                    reportOrWithdrawRunForCoding(Integer.valueOf(idAndDistNo[0]), idAndDistNo[1]
+                            , user.getTjDistNo()
+                            , user.getUsername()
+                            , "待办事项_上报".equalsIgnoreCase(dpName));
+                }
+            } else if(dataProcessNew.getAlertType() == 94) {
+                String processSql = dataProcessNew.getProcessSql();
+                String alertSql = dataProcessNew.getAlert();
+
+                processSql = processSql.replace("${keyword}", keyword);
+                processSql = processSql.replace("${_udistNo}", userDistNo);
+                processSql = processSql.replace("${writer}", username);
+
+                List<Map<String, Object>> maps = null;
+                if (dataProcessNew.getIsAlert()) {
+
+                    maps = jdbcTemplatePrimary.queryForList(processSql);
+
+                    if (!CollectionUtils.isEmpty(maps)) {
+
+                        for(int i = 0; i < maps.size(); i++){
+                            alertSql = alertSql.replace("${c_distno}", (String)maps.get(i).get("c_distno"));
+
+                            //发起网络请求
+                            //存在未处理返回true
+                            //{"rvalue":false,"isException":false}
+                            //进行登录
+                            //登陆头信息
+                            HttpHeaders existNotProcessDataHeaders = new HttpHeaders();
+                            List<String> cookies = new ArrayList<>();
+
+                            // cookie设置
+                            existNotProcessDataHeaders.put(HttpHeaders.COOKIE, cookies);
+
+
+                            //设置请求参数
+                            //因为请求为post请求且content-type 的值为application/x-www-form-urlencoded
+                            //所有必须用下面的集合来传递参数
+                            MultiValueMap<String, Object> existNotProcessDataParam = new LinkedMultiValueMap<>(15);
+
+                            //登陆报文
+                            HttpEntity<MultiValueMap<String, Object>> existNotProcessDataHttpEntity =
+                                    new HttpEntity<>(existNotProcessDataParam, existNotProcessDataHeaders);
+
+                            //发起登陆请求
+                            ResponseEntity<String> existNotProcessDataResponse = null;
+
+                            try{
+                                existNotProcessDataResponse = restTemplate.exchange(alertSql
+                                        , HttpMethod.GET
+                                        , existNotProcessDataHttpEntity
+                                        , String.class);
+
+//                                {"rvalue":false,"isException":false}
+//                                if(existNotProcessDataResponse.getBody().contains(""))
+
+
+                                Map<String, Object> map = (Map<String, Object>) JSONObject.toBean(JSONObject.fromObject(existNotProcessDataResponse.getBody()), Map.class);
+
+                                //如果请求失败或存在预警的数据 则返回
+                                if(CollectionUtils.isEmpty(map)
+                                        || ((Boolean) map.get("rvalue"))
+                                        || ((Boolean) map.get("isException"))){
+                                    //返回要跳转的连接
+                                    InteractiveVO temp = new InteractiveVO();
+                                    temp.setWindowType(2);
+                                    temp.setWindowInfo(dataProcessNew.getAlertSub());
+                                    temp.setSbFlag(false);
+                                    interactiveVOS.add(temp);
+
+                                    return interactiveVOS;
+                                }
+
+//                                InteractiveVO temp = new InteractiveVO();
+//                                temp.setWindowType(2);
+//                                temp.setWindowInfo(dataProcessNew.getAlertSub());
+//                                interactiveVOS.add(temp);
+
+                            }catch (Exception e){
+                                e.printStackTrace();
+                                throw new RuntimeException("校验失败！");
+                            }
+
+                        }
+                    }
+                } else {
+//                  jdbcTemplatePrimary.execute(processSql);
+                    String[] idAndDistNo = keyword.split("_");
+                    reportOrWithdrawRunForCoding(Integer.valueOf(idAndDistNo[0]), idAndDistNo[1]
+                            , user.getTjDistNo()
+                            , user.getUsername()
+                            , "待办事项_上报".equalsIgnoreCase(dpName));
                 }
             } else {
                 continue;
@@ -168,9 +313,202 @@ public class BaseDataServiceImpl implements BaseDataService {
         return null;
     }
 
+    @Transactional(rollbackFor = Throwable.class)
+    public void reportOrWithdrawRunForCoding(Integer uploadBaseId, String distNo, String userDistNo, String username, Boolean isReport){
+        UploadBase uploadBase = uploadBaseManager.findById(uploadBaseId);
+        if(Objects.isNull(uploadBase)){
+            throw new RuntimeException("没有上报或退回单位的记录！");
+        }
+
+        if(!uploadBase.getRunFlag()){
+            throw new RuntimeException("当前上报或退回单位不可用！");
+        }
+
+        Integer years = uploadBase.getYears();
+        Integer months = uploadBase.getMonths();
+        String tableType = uploadBase.getTableType();
+
+        Boolean isReportBefore = false;
+
+        Dist dist = distManager.getDistByYearAndDistNo(years, distNo);
+
+        if(distNo.equalsIgnoreCase("0")){
+            distNo = "%";
+        }
+
+        //查询出所有上报数据单位（包括已上报和未上报）
+        List<UploadBase> allUploadBasesList = uploadBaseManager.findReportByDistAndTableType(years, months, distNo, tableType);
+
+        //筛选出已经上报了的单位
+        List<UploadBase> reportUploadBasesList = allUploadBasesList.stream().filter(e -> {
+            if(e.getRunFlag() && e.getOkFlag() && e.getSbFlag()){
+                return true;
+            }
+            return false;
+        }).collect(Collectors.toList());
+
+        //筛选出未上报的单位
+
+
+        StringBuilder updateUploadBaseSql = new StringBuilder();
+
+        if(isReport){
+            //如果是上报
+
+            //如果该地区或该地区下没有上报的单位 则需要进行上报
+            if(CollectionUtils.isEmpty(reportUploadBasesList)){
+
+
+                //上报本级
+                updateUploadBaseSql.setLength(0);
+                updateUploadBaseSql.append("update uploadBase set sbflag=1,okflag=1,outbz=1,bdate=NOW(),writer= '" + username +
+                        "' WHERE uploadBase.years=" + years + " AND uploadBase.months=" + months +
+                        " AND uploadBase.distno='" + distNo + "' and uploadBase.runflag=1 " +
+                        " and uploadBase.okflag=0 and uploadBase.tableType='" + tableType + "'");
+                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
+
+
+                //
+                updateUploadBaseSql.setLength(0);
+                updateUploadBaseSql.append("update uploadBase p1 LEFT JOIN uploadBase p2 ON p1.years=p2.years " +
+                        " and p1.months=p2.months and p2.runflag=1 and p2.okflag=1 and p1.distno=p2.distno and p1.tableType=p2.tableType " +
+                        " set p1.okflag=1,p1.outbz=1,p1.bdate=NOW(),p1.writer= '" + username +
+                        "' WHERE p1.years=" + years + " AND p1.months=" + months + " and p1.distno like concat(" + distNo + ",'%') " + "  AND p1.distno<>'" + distNo +
+                        "' and p1.runflag=1 and p1.okflag=0 and p1.tableType='" + tableType + "' AND p2.id is null");
+                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
+
+            } else {
+                updateUploadBaseSql.setLength(0);
+                updateUploadBaseSql.append("UPDATE uploadBase u1 left JOIN uploadbase u2 on u1.years=u2.years " +
+                        " and u1.months=u2.months and u2.runflag=1 and u2.okflag=1 and u1.distno=u2.distno and u1.tableType=u2.tableType " +
+                        " set u1.okflag=1,u1.outbz=1,u1.bdate=NOW(),u1.writer='" + username +
+                        "' where u1.years=" + years + " AND u1.months=" + months + " AND u1.distno like concat(" + distNo + ",'%') " +
+                        " and u1.runflag=1 and u1.okflag=0 and u1.tableType='" + tableType + "' and u2.id is null");
+                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
+
+                final String distNoFinal = distNo;
+                //如果当前级别的所有下级都已经上报了 则上报本级
+                Long nextLevelReportCount = reportUploadBasesList.stream().filter(e -> {
+                    if(!e.getDistNo().equalsIgnoreCase(distNoFinal)){
+                        return true;
+                    }
+                    return false;
+                }).count();
+
+                Long nextLevelNeedReportCount = allUploadBasesList.stream().filter(e -> {
+                    if(!e.getDistNo().equalsIgnoreCase(distNoFinal)){
+                        return true;
+                    }
+                    return false;
+                }).count();
+
+                if(nextLevelNeedReportCount.equals(nextLevelReportCount)){
+                    updateUploadBaseSql.setLength(0);
+                    updateUploadBaseSql.append("update uploadBase set sbflag=1,okflag=1,outbz=1,bdate=NOW(),writer='" + username +
+                            "' WHERE uploadBase.years=" + years + " AND uploadBase.months=" + months + " " +
+                            " AND uploadBase.distno='" + distNo + "' and uploadBase.tableType='" + tableType + "'");
+                    jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
+                }
+
+            }
+
+        } else {
+            //如果是退回
+
+            if(!CollectionUtils.isEmpty(reportUploadBasesList)){
+                isReportBefore = true;
+
+                updateUploadBaseSql.setLength(0);
+                //用户不能退回自己本身的地区 （天河区用户不能退回天河区）
+                updateUploadBaseSql.append("update uploadBase set sbflag=0,okflag=0,outbz=0,bdate=null,edate=NOW(),writer= '" + username +
+                        "' WHERE years=" + years + " AND months=" + months +
+                        " AND distno='" + distNo + "' and runflag=1 and okflag=1 " +
+                        " and distno<>'" + userDistNo + "' and tableType='" + tableType + "'");
+                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
+
+
+
+                updateUploadBaseSql.setLength(0);
+                updateUploadBaseSql.append("update uploadBase b1 LEFT JOIN uploadBase b2 " +
+                        " on b1.years=b2.years and b1.months=b2.months and b2.runflag=1 " +
+                        " and b2.okflag=0 and b1.distno=b2.distno and b1.tableType=b2.tableType " +
+                        " SET b1.okflag=0,b1.outbz=0,b1.bdate=null,b1.edate=NOW(),b1.writer='" + username +
+                        "' WHERE b1.years=" + years + " AND b1.months=" + months + " AND b1.distno<>'" + distNo + "' " +
+                        " and  b1.distno like concat(" + distNo + ",'%') " +
+                        " and b1.runflag=1 and b1.okflag=1 and b1.tableType='" + tableType +
+                        "' and b2.id is null");
+                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
+
+            } else {
+                updateUploadBaseSql.setLength(0);
+                updateUploadBaseSql.append(" UPDATE uploadBase s1 LEFT JOIN uploadBase s2 ON s1.years=s2.years " +
+                        " and s1.months=s2.months and s2.runflag=1 and s2.okflag=0 and s1.distno=s2.distno and s1.tableType=s2.tableType" +
+                        " SET s1.okflag=0,s1.outbz=0,s1.bdate=null,s1.edate=NOW(),s1.writer= '" + username +
+                        "' WHERE s1.years=" + years + " AND s1.months=" + months + " and  s1.distno ='" + distNo + "' and s1.runflag=1 " +
+                        " and s1.okflag=1 and s1.tableType='" + tableType + "' and s1.distno<>'" + userDistNo + "'");
+                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
+
+            }
+
+        }
+
+
+        //处理完成后
+        List<FileList> fileLists = fileListManager.listFileLists(tableType, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, userDistNo);
+
+        //关联更新所有单位下的表数据状态
+        for (FileList fileList : fileLists) {
+
+            StringBuilder updateSql = new StringBuilder();
+
+            if(isReport){
+                updateSql.setLength(0);
+                //如果是上报
+                updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=1, statusno=3, saveflag='是',upReportTime=NOW() where years = ")
+                        .append(years).append(" and distid like '").append(distNo).append("%'").append(" and ifnull(okflag, 0) = 0");
+
+            } else {
+                //如果是退回
+                updateSql.setLength(0);
+
+                if(isReportBefore){
+                    //如果是上报
+                    updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=0, statusno=2, saveflag='否',upReportTime=null where years = ")
+                            .append(years).append(" and distid like '").append(distNo).append("%'").append(" and okflag=1 and distid<>'").append(userDistNo).append("'");
+                } else {
+
+                    //如果是上报
+                    updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=0, statusno=2, saveflag='否',upReportTime=null where years = ")
+                            .append(years).append(" and distid = '").append(distNo).append("%'").append(" and okflag=1 and distid<>'").append(userDistNo).append("'");
+
+                }
+            }
+            jdbcTemplatePrimary.execute(updateSql.toString());
+        }
+    }
+
     @Override
     public List<ExcelTemplateVO> listExcelTemplates(Integer years, String typeCode, String username) {
         List<ExcelTemplate> excelTemplates = excelTemplateManager.listExcelTemplates(years, typeCode, username, FileListConstant.FILE_LIST_TABLE_TYPE_BASE);
+        List<ExcelTemplateVO> excelTemplateVOS = new ArrayList<>();
+        for (ExcelTemplate excelTemplate : excelTemplates) {
+            ExcelTemplateVO excelTemplateVO = new ExcelTemplateVO();
+            excelTemplateVO.setId(excelTemplate.getId());
+            excelTemplateVO.setYears(excelTemplate.getYears());
+            excelTemplateVO.setShortDis(excelTemplate.getShortDis());
+            excelTemplateVO.setType(excelTemplate.getType());
+            excelTemplateVO.setExcelType(excelTemplate.getExcelType());
+            excelTemplateVO.setFileName(excelTemplate.getFileName());
+            excelTemplateVO.setWriter(excelTemplate.getWriter());
+            excelTemplateVO.setWriteDate(excelTemplate.getWriteDate());
+            excelTemplateVOS.add(excelTemplateVO);
+        }
+        return excelTemplateVOS;
+    }
+
+    @Override
+    public List<ExcelTemplateVO> listExcelTemplates(Integer years, String typeCode, String username, String userDistNo) {
+        List<ExcelTemplate> excelTemplates = excelTemplateManager.listExcelTemplates(years, typeCode, username, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, userDistNo);
         List<ExcelTemplateVO> excelTemplateVOS = new ArrayList<>();
         for (ExcelTemplate excelTemplate : excelTemplates) {
             ExcelTemplateVO excelTemplateVO = new ExcelTemplateVO();
@@ -223,6 +561,8 @@ public class BaseDataServiceImpl implements BaseDataService {
         baseDataQuery.setTypeCode(typeCode);
         baseDataQuery.setConditions(conditions);
         baseDataQuery.setSorts(sorts);
+        baseDataQuery.setUserDistNo(userDistNo);
+
         if (!"多表一个Excel".equals(excelTemplate.getExcelType())) {
             List<Map<String, Object>> list = baseDataManager.listTableData(baseDataQuery, false, List.class);
             data.put(tableName.toLowerCase(), list);
@@ -233,12 +573,22 @@ public class BaseDataServiceImpl implements BaseDataService {
                 List<Map<String, Object>> list = baseDataManager.listTableData(baseDataQuery, false, List.class);
                 if (excelTemplate.getTemplateShape() == 2) {
                     data.put(fileList.getTableName().toLowerCase(), list);
+
                 } else {
                     throw new RuntimeException("不支持用户自定义excel导出！");
                 }
 
             }
+
+            /*List<FileList> fileLists2 = fileListManager.listFileLists(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, "0");
+            for (FileList fileList : fileLists2) {
+                if(Objects.isNull(data.get(fileList.getTableName().toLowerCase()))){
+                    data.put(fileList.getTableName().toLowerCase(), new ArrayList<>());
+                }
+            }*/
         }
+
+
         ExportExcelVO exportExcelVO = new ExportExcelVO();
         exportExcelVO.setYears(years);
         exportExcelVO.setMonths(months);
@@ -298,8 +648,8 @@ public class BaseDataServiceImpl implements BaseDataService {
 
         response.reset();
         response.setContentType("application/vnd.ms-excel");
-        response.setHeader("Content-Disposition", "attachment; filename=" + excelTemplate.getFileName()
-                + "");
+        response.setHeader("Content-Disposition", "attachment; filename=" + excelTemplate.getFileName() + "");
+        
         try {
             ExcelUtilPOI.parse(request.getSession().getServletContext(), response.getOutputStream(), excelTemplate.getName(), excelTemplate.getEcx(), params);
         } catch (IOException e) {
@@ -332,5 +682,111 @@ public class BaseDataServiceImpl implements BaseDataService {
         Map<String, Object> map = baseDataManager.getPreviousYearData(typeCode, tableName, years, months, paramJson);
         return map;
     }
+
+    /**
+     * 获取基本表列表
+     *
+     * @param typeCode
+     * @param years
+     * @param months
+     * @return
+     */
+    @Override
+    public List<FileList> listBaseTables(String typeCode, Integer years, Integer months) {
+        List<FileList> fileLists = baseDataManager.listBaseTables(typeCode, years, months);
+        return fileLists;
+    }
+
+    @Override
+    public List<Integer> getDistAllGrade() {
+        List<Integer> distAllGrade = baseDataManager.getDistAllGrade();
+        return distAllGrade;
+    }
+
+    @Override
+    public Boolean initUploadData(InitUploadDataDTO initUploadDataDTO) {
+        Boolean refalse=false;
+        try {
+//			String sql = "insert into uploadBase(years, months,distno, distName, tableType, type, name, bdate, edate, okflag,sbflag, runflag)" +
+//					"select #years# as years,#months# as months, distid, distName,(select tableType from tableType where id=${__tableTypeId})as tableType,'N-#years#-#months#' as type, (d.distName+(select tableType from tableType where id=${__tableTypeId})+'数据统计表') as name,null as bdate, null as edate,0 as  okflag,0 as  sbflag,1 as runflag " +
+//					" from dist d where years=#years#   and d.distId like case when '#_distNo#'='0'  then '%' else '#_distNo#%'end" +
+//					"  and  not exists (select u.id from uploadBase u where d.years=u.years and u.months=#months# and d.distId=u.distno and u.tableType=(select tableType from tableType where id=${__tableTypeId}))";
+
+            Map<String, Object> paramMap = new HashMap();
+            paramMap.put("years", initUploadDataDTO.getYears());
+            paramMap.put("months", initUploadDataDTO.getMonths());
+            paramMap.put("distNo", initUploadDataDTO.getDistNo());
+
+            String sql="${uploadbase_sql}";
+
+            sql= Common.replaceFun1(sql, this.funcontrast(2));
+            sql= ReplaceSqlUtil.getSql(sql, "");
+            sql=Common.replaceParamsbyKeyNotNull(sql, paramMap);
+            int renum=jdbcTemplatePrimary.update(sql);
+            if(renum >- 1){
+                refalse = true;
+            }
+        } catch (DataAccessException e) {
+            e.printStackTrace();
+        }
+        return refalse;
+    }
+
+    /**
+     * 校验正在运行的稽核操作
+     *
+     * @param mqMessagesDTO
+     * @return
+     */
+    @Override
+    public Boolean checkRunning(MqMessagesDTO mqMessagesDTO) {
+        Boolean checkFlag = mqMessageManager.checkRunning(mqMessagesDTO);
+        return checkFlag;
+    }
+
+    @Override
+    public Boolean checkRunningByDist(MqMessagesDTO mqMessagesDTO) {
+
+        String distNo = mqMessagesDTO.getDistNo();
+
+        List<MqMessage> mqMessageList = mqMessageManager.checkRunningAll(mqMessagesDTO);
+
+        //如果当前操作的地区上级或下级存在操作 则停止操作
+        mqMessageList = mqMessageList.stream().filter(e -> {
+            if(e.getDistNo().startsWith(distNo)
+                    || distNo.startsWith(e.getDistNo())){
+                return true;
+            } else {
+                return false;
+            }
+        }).collect(Collectors.toList());
+
+        return !(mqMessageList.size() > 0);
+    }
+
+    @Override
+    public void checkRuningAll(MqMessagesDTO mqMessagesDTO) {
+
+        //查询当前是否存在正在执行的任务、正在被消费
+        List<MqMessage> runMqMessages = mqMessageManager.findRunningMessage(mqMessagesDTO);
+        if(!CollectionUtils.isEmpty(runMqMessages)){
+            throw new RuntimeException("当前存在正在执行的任务！");
+        }
+
+        //查询当前是否存在待执行的任务、还未开始消费
+        List<MqMessage> takeMqMessages = mqMessageManager.findTakeMessage(mqMessagesDTO);
+        if(!CollectionUtils.isEmpty(takeMqMessages)){
+            throw new RuntimeException("当前存在执行的任务！");
+        }
+    }
+
+
+    public List<Map<String, Object>> funcontrast(int ttype) {
+        List<Map<String, Object>> rvalue = null;
+        String sql = "select mysql_fun, sql_fun, valuedec, sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
+        rvalue = jdbcTemplatePrimary.queryForList(sql, new Object[]{ttype});
+        return rvalue;
+    }
+
 
 }

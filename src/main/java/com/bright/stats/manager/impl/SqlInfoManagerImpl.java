@@ -59,7 +59,7 @@ public class SqlInfoManagerImpl implements SqlInfoManager {
                     tableHeader.setTitle(split[i]);
                     tableHeader.setFieldType(fileItem.getFType());
                     tableHeader.setFieldFormat(fileItem.getDisFormat());
-                    tableHeader.setSort(fileItem.getDefId());
+                    tableHeader.setSort(fileItem.getDisId());
                     tableHeader.setWidth(fileItem.getFLen());
                     if (null != fileItem.getIsFrozen() && fileItem.getIsFrozen()) {
                         tableHeader.setFixed("left");

@@ -1,6 +1,8 @@
 package com.bright.stats.manager.impl;
 
 import com.bright.stats.manager.DistManager;
+import com.bright.stats.pojo.po.primary.Dist;
+import com.bright.stats.pojo.vo.DistAdapterVO;
 import com.bright.stats.pojo.vo.DistVO;
 import com.bright.stats.repository.primary.DistRepository;
 import lombok.RequiredArgsConstructor;
@@ -98,5 +100,78 @@ public class DistManagerImpl implements DistManager {
         nativeQuery.unwrap(NativeQueryImpl.class).setResultTransformer(Transformers.aliasToBean(DistVO.class));
         List<DistVO> resultList = nativeQuery.getResultList();
         return resultList;
+    }
+
+    @Override
+    public List<Integer> getDistAllGrade() {
+        List<Integer> distAllGrade = distRepository.findDistNoAllGrade();
+        return distAllGrade;
+    }
+
+    /**
+     * 根据年份和地区编号获取地区
+     *
+     * @param years  年份
+     * @param distNo 地区编号
+     * @return
+     */
+    @Override
+    public Dist getDistByYearAndDistNo(Integer years, String distNo) {
+        Dist dist = distRepository.findByYearsAndDistId(years, distNo);
+        return dist;
+    }
+
+    @Override
+    public List<DistAdapterVO> listAdapterDistForList(Integer years, String userDistNo, String distNo, Integer distNoLength) {
+        String sql = " select id, distId as distNo, distName, distIdParent as parentDistNo, distType, years, import_distno as importDistNo, import_name as importName, sbtime as sbTime,  case when (select COUNT(*) from dist as d where dist.distId=d.distIdParent)>=1 then 1 else 0 end as childrenExistFlag from dist where years=:years and distId like :userDistNo and distId like :distNo and len(distId) <= :distNoLength order by distId";
+        Query nativeQuery = entityManagerPrimary.createNativeQuery(sql);
+        nativeQuery.setParameter("years", years);
+        nativeQuery.setParameter("userDistNo", userDistNo + "%");
+        nativeQuery.setParameter("distNo", distNo + "%");
+        nativeQuery.setParameter("distNoLength", distNoLength);
+        nativeQuery.unwrap(NativeQueryImpl.class).setResultTransformer(Transformers.aliasToBean(DistAdapterVO.class));
+        List<DistAdapterVO> resultList = nativeQuery.getResultList();
+        return resultList;
+    }
+
+    /**
+     * 获取当前地区的最大长度
+     *
+     * @param distNo
+     * @param years
+     * @return
+     */
+    @Override
+    public int getCurrMaxDistNoLength(String distNo, Integer years) {
+        String sql = "select max(len(distid)) from dist where years=:years and distId like :distNo";
+        Query nativeQuery = entityManagerPrimary.createNativeQuery(sql);
+        nativeQuery.setParameter("years", years);
+        nativeQuery.setParameter("distNo", distNo + "%");
+        int result = distRepository.getCurrMaxDistNoLength(distNo + "%", years);
+        return result;
+    }
+
+    /**
+     * 获取当前地区的最大长度
+     *
+     * @param distNo
+     * @param years
+     * @return
+     */
+    @Override
+    public String getDistFullName(String distNo, Integer years) {
+        List<Integer> allGrade = getDistAllGrade();
+
+        StringBuilder allDistName = new StringBuilder("");
+
+        for (int i = 0; i < allGrade.size(); i++) {
+            if(distNo.length() >= allGrade.get(i)){
+                Dist dist = getDistByYearAndDistNo(years, distNo.substring(0, allGrade.get(i)));
+                if(dist != null){
+                    allDistName.append(dist.getDistName());
+                }
+            }
+        }
+        return allDistName.toString();
     }
 }

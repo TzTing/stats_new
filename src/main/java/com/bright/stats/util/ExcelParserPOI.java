@@ -1,9 +1,14 @@
 package com.bright.stats.util;
 
+import com.bright.stats.util.tag.ApplicationContextProvider;
+import com.bright.stats.util.tag.ForeachTag;
 import com.bright.stats.util.tag.ITag;
+import com.bright.stats.util.tag.TransferTag;
 import org.apache.poi.hssf.usermodel.HSSFCell;
 import org.apache.poi.hssf.usermodel.HSSFRow;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
@@ -12,6 +17,8 @@ import java.util.*;
 public class ExcelParserPOI {
     public static String tagPackages;
     private static Map tagMap = new HashMap();
+
+    ITag transfer;
 
     static {
         tagPackages = ITag.class.getPackage().getName();
@@ -269,7 +276,12 @@ public class ExcelParserPOI {
         if (null == tag) {
             try {
                 Class clazz = Class.forName(tagPackages + "." + tagName);
-                tag = (ITag) clazz.newInstance();
+                if("transfer".equalsIgnoreCase(str)){
+                    tag = ApplicationContextProvider.getApplicationContext().getBean(TransferTag.class);
+                } else if ("foreach".equalsIgnoreCase(str)){
+                    tag = ApplicationContextProvider.getApplicationContext().getBean(ForeachTag.class);
+                }
+//                tag = (ITag) clazz.newInstance();
             } catch (Exception e) {
                 tag = null;
                 e.printStackTrace();

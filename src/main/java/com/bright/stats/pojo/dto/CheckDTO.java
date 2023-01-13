@@ -1,5 +1,6 @@
 package com.bright.stats.pojo.dto;
 
+import com.bright.stats.pojo.po.primary.TableType;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -26,4 +27,6 @@ public class CheckDTO implements Serializable {
     private Boolean isGrade;
 
     private String userDistNo;
+
+    private TableType tableType;
 }

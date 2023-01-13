@@ -1,5 +1,7 @@
 package com.bright.common.config;
 
+import org.hibernate.EmptyInterceptor;
+import org.hibernate.type.Type;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateProperties;
@@ -17,6 +19,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import javax.persistence.EntityManager;
 import javax.sql.DataSource;
+import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -64,6 +68,22 @@ public class PrimaryConfig {
     }
 
     private Map<String, Object> getHibernateProperties() {
+        Map<String, String> prop = new HashMap<>(2);
+        prop.put("hibernate.ejb.interceptor", "com.bright.common.config.JpaInterceptor");
+        jpaProperties.setProperties(prop);
         return hibernateProperties.determineHibernateProperties(jpaProperties.getProperties(), new HibernateSettings());
     }
+
+//    @Bean
+//    public EmptyInterceptor hibernateInterceptor() {
+//        return new EmptyInterceptor() {
+//            @Override
+//            public boolean onLoad(Object entity, Serializable id, Object[] state,
+//                                  String[] propertyNames, Type[] types) {
+//                System.out.println("Loaded " + id);
+//                return false;
+//            }
+//        };
+//    }
+
 }

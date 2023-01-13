@@ -12,9 +12,12 @@ import com.bright.stats.service.AnalysisCenterService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 import java.util.List;
 import java.util.Map;
 
@@ -33,7 +36,7 @@ public class AnalysisCenterController {
 
     @ApiOperation(value = "获取分析方案列表")
     @GetMapping("/analysisScheme/list")
-    public Result listAnalysisSchemes(Integer years){
+    public Result listAnalysisSchemes(@NotNull(message = "年份不能为空!") Integer years){
         String typeCode = SecurityUtil.getLoginUser().getTableType().getTableType();
         List<SqlInfoVO> sqlInfoVOS = analysisCenterService.listAnalysisSchemes(years, typeCode);
         return Result.success(sqlInfoVOS);
@@ -59,8 +62,9 @@ public class AnalysisCenterController {
     }
 
     @ApiOperation(value = "导出分析中心数据")
+    @PreAuthorize("hasAnyAuthority('sumAnalysis:menuExport')")
     @PostMapping("/exportExcel")
-    public void exportExcel(ExportExcelNoTemplateDTO exportExcelNoTemplateDTO, HttpServletResponse response){
+    public void exportExcel(@RequestBody ExportExcelNoTemplateDTO exportExcelNoTemplateDTO, HttpServletResponse response){
         analysisCenterService.exportExcel(exportExcelNoTemplateDTO, response);
     }
 

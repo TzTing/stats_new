@@ -78,4 +78,7 @@ public class ExcelTemplate implements Serializable {
  	@Column(name = "exc_describe")
 	private String excDescribe;
 
+	@Column(name = "belongDistNo")
+	private String belongDistNo;
+
 }

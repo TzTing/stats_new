@@ -39,7 +39,20 @@ public interface FileListManager {
      * @param tableType 表类型 基本表/分析表
      * @param years 年份
      * @param months 月份
+     * @param userDistNo 用户所属地区编号 如果为"0" 则为广东省
      * @return 多个FileList
      */
     List<FileList> listFileLists(String typeCode, String tableType, Integer years, Integer months, String userDistNo);
+
+
+    /**
+     * 获取多个FileList(只有单独的filelist表 不需要关联其他的内容)
+     * @param typeCode 模式
+     * @param tableType 表类型 基本表/分析表
+     * @param years 年份
+     * @param months 月份
+     * @return 多个FileList
+     */
+    List<FileList> listFileListsOnly(String typeCode, String tableType, Integer years, Integer months);
+
 }

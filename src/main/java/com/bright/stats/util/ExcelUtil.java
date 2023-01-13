@@ -422,10 +422,13 @@ public class ExcelUtil extends com.bright.stats.util.tdlz_ht.ExcelUtil {
 //					+ outFileName + ".xls");// 设定输出文件头
 		//	outFileName = URLEncoder.encode(outFileName, "GB2312");
 			outFileName=outFileName.replaceFirst(" ", "");
-			outFileName=new String(StringUtils.trimToEmpty(outFileName).getBytes("utf-8"),"ISO8859_1");
-			response.setContentType("application/msexcel");// 定义输出类型
-			response.setHeader("Content-disposition", "attachment; filename="
-			 +outFileName +".xls");
+//			outFileName=new String(StringUtils.trimToEmpty(outFileName).getBytes("utf-8"),"ISO8859_1");
+//			response.setContentType("application/msexcel");// 定义输出类型
+//			response.setHeader("Content-disposition", "attachment; filename="
+//			 +outFileName +".xls");
+
+			response.addHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode( outFileName +".xls", "utf-8"));
+			response.setContentType("application/vnd.ms-excel;charset=gb2312");
 		
 //			response.setHeader("Content-disposition", "attachment; filename="
 //					 +outFileName+".xls");

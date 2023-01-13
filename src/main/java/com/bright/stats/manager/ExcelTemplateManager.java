@@ -21,6 +21,17 @@ public interface ExcelTemplateManager {
     List<ExcelTemplate> listExcelTemplates(Integer years, String typeCode, String username, String tableType);
 
     /**
+     * 获取多个ExcelTemplate
+     * @param years 年份
+     * @param typeCode 模式/表名称
+     * @param username 用户名称
+     * @param tableType 基础表/分析表
+     * @param userDistNo 用户地区编号
+     * @return 多个ExcelTemplate
+     */
+    List<ExcelTemplate> listExcelTemplates(Integer years, String typeCode, String username, String tableType, String userDistNo);
+
+    /**
      * 按id获取ExcelTemplate
      * @param excelTemplateId id
      * @return 单个ExcelTemplate

@@ -94,6 +94,9 @@ public class User implements Serializable {
     @Transient
     private Integer distNoNextLength;
 
+    @Transient
+    private String allDistName;
+
 
     public String getZtSql(String head) {
         String rvalue = "";

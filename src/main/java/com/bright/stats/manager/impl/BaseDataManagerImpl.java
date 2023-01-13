@@ -1,10 +1,12 @@
 package com.bright.stats.manager.impl;
 
+import com.alibaba.fastjson2.JSON;
 import com.bright.common.pojo.query.Condition;
 import com.bright.common.result.PageResult;
 import com.bright.common.util.SecurityUtil;
 import com.bright.stats.constant.FileListConstant;
 import com.bright.stats.manager.*;
+import com.bright.stats.pojo.dto.SumBaseDataDTO;
 import com.bright.stats.pojo.dto.SummaryDTO;
 import com.bright.stats.pojo.dto.TableDataDTO;
 import com.bright.stats.pojo.model.ExcelTemplateInfo;
@@ -16,6 +18,9 @@ import com.bright.stats.pojo.vo.CheckVO;
 import com.bright.stats.pojo.vo.ImportExcelVO;
 import com.bright.stats.pojo.vo.SummaryVO;
 import com.bright.stats.util.*;
+import com.sun.org.apache.xpath.internal.operations.Bool;
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.pool.HikariPool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.excelutils.ExcelException;
@@ -90,6 +95,15 @@ public class BaseDataManagerImpl implements BaseDataManager {
         List<FileItem> fileItems = fileList.getFileItems();
         List<String> fileItemCollect = fileItems.stream().map(fileItem -> fileItem.getFieldName() + " as " + fileItem.getFieldName()).collect(Collectors.toList());
         fileItemCollect.add("id as id");
+        if(!fileItemCollect.contains("balflag as balflag")){
+            fileItemCollect.add("balflag as balflag");
+        }
+        if(!fileItemCollect.contains("saveflag as saveflag")){
+            fileItemCollect.add("saveflag as saveflag");
+        }
+        if(!fileItemCollect.contains("sumflag as sumflag")){
+            fileItemCollect.add("sumflag as sumflag");
+        }
         String filed = String.join(", ", fileItemCollect);
         StringBuffer sqlStringBuffer = new StringBuffer();
         sqlStringBuffer.append("select ").append(filed).append(" from ").append(fileList.getTableName());
@@ -173,6 +187,22 @@ public class BaseDataManagerImpl implements BaseDataManager {
                     }
                 }
             }
+        } else {
+            sqlOrderByStringBuffer.setLength(0);
+
+            sqlOrderByStringBuffer.append(fileList.getOrderStr());
+            String sqlOrder = fileList.getOrderStr();
+
+            if(org.apache.commons.lang.StringUtils.isEmpty(org.apache.commons.lang.StringUtils.trimToEmpty(sqlOrder))) {
+
+                sqlOrder = "order by years,distId" + (fileList.getFileItemLink() != null ? ",lxid" : "");
+                sqlOrder += ", distid";
+
+                sqlOrder += ", ztid, id, sumflag";
+
+            }
+
+            sqlOrderByStringBuffer.append(sqlOrder);
         }
 
         if (Objects.nonNull(pageNumber) && Objects.nonNull(pageSize) && isPage) {
@@ -194,10 +224,161 @@ public class BaseDataManagerImpl implements BaseDataManager {
             nativeQuery.setFirstResult(pageNumber * pageSize);
             nativeQuery.setMaxResults(pageSize);
 
+
+            if("rep905".equalsIgnoreCase(fileList.getTableName()) || "rep906".equalsIgnoreCase(fileList.getTableName())){
+
+                StringBuffer sqlCountStringBufferOther = new StringBuffer();
+                sqlCountStringBufferOther.append("select count(*) from ( select ")
+                        .append(filed)
+                        .append(", ztid as ztid")
+                        .append(" from ").append(fileList.getTableName()).append(sqlWhereStringBuffer).append(" ) as t1 ")
+                        .append(" left join ( select * from distEx where 1 = 1 and distid like '")
+                        .append("0".equalsIgnoreCase(distNo) ? "%" : distNo + "%")
+                        .append("'")
+                        .append(" and tablename = '")
+                        .append(fileList.getTableName())
+                        .append("'")
+                        .append(" and years = ")
+                        .append(years)
+                        .append(") as t2 on t1.ztid = t2.ztid order by ")
+                        .append("isnull(t2.parent_id, t2.ztid), t2.ztTypeId");
+
+                Query nativeQueryCountOther = entityManagerPrimary.createNativeQuery(sqlCountStringBufferOther.toString());
+                for (String parameterKey : parameterMap.keySet()) {
+                    nativeQueryCountOther.setParameter(parameterKey, parameterMap.get(parameterKey));
+                }
+
+                Long countsOther = Long.valueOf(nativeQueryCountOther.getSingleResult().toString());
+
+
+
+
+                StringBuffer sqlStringBufferOther = new StringBuffer();
+                sqlStringBufferOther.append("select t1.* from ( select * ")
+                        .append(" from ").append(fileList.getTableName()).append(sqlWhereStringBuffer).append(" ) as t1 ")
+                        .append(" left join ( select * from distEx where 1 = 1 and distid like '")
+                        .append("0".equalsIgnoreCase(distNo) ? "%" : distNo + "%")
+                        .append("'")
+                        .append(" and tablename = '")
+                        .append(fileList.getTableName())
+                        .append("'")
+                        .append(" and years = ")
+                        .append(years)
+                        .append(") as t2 on t1.ztid = t2.ztid order by ")
+                        .append("isnull(t2.parent_id, t2.ztid), t2.ztTypeId");
+
+
+                if(CollectionUtils.isEmpty(sorts)) {
+                    String sqlOrder = fileList.getOrderStr();
+
+                    if(StringUtils.isEmpty(StringUtils.trimToEmpty(sqlOrder))) {
+                        sqlOrder = " ,t1.years, t1.distId" + (fileList.getFileItemLink() != null ? ",t1.lxid" : "");
+                        sqlOrder += ", t1.distid";
+
+                        sqlOrder += ", t1.ztid, t1.id, t1.sumflag";
+                        sqlStringBufferOther.append(sqlOrder);
+                    }
+                } else {
+                    sqlStringBufferOther.append(",");
+                    for (int i = 0; i < sorts.size(); i++) {
+                        if (sorts.get(i).indexOf(",") == -1) {
+                            if (i == sorts.size() - 1) {
+                                sqlStringBufferOther.append(sorts.get(i));
+                            } else {
+                                sqlStringBufferOther.append(sorts.get(i) + ", ");
+                            }
+
+                        } else {
+                            String sortString = sorts.get(i);
+                            sortString = sortString.replace(",", " ");
+                            if (i == sorts.size() - 1) {
+                                sqlStringBufferOther.append(sortString);
+                            } else {
+                                sqlStringBufferOther.append(sortString + ", ");
+                            }
+                        }
+                    }
+
+                }
+
+
+                Query nativeQueryOther = entityManagerPrimary.createNativeQuery(sqlStringBufferOther.toString());
+
+                for (String parameterKey : parameterMap.keySet()) {
+                    nativeQueryOther.setParameter(parameterKey, parameterMap.get(parameterKey));
+                }
+                nativeQueryOther.setFirstResult(pageNumber * pageSize);
+                nativeQueryOther.setMaxResults(pageSize);
+
+                nativeQueryOther.unwrap(NativeQueryImpl.class).setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP);
+                List<Map<String, Object>> resultList = nativeQueryOther.getResultList();
+                return (T) PageResult.of(countsOther, resultList);
+            }
+
             nativeQuery.unwrap(NativeQueryImpl.class).setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP);
             List<Map<String, Object>> resultList = nativeQuery.getResultList();
             return (T) PageResult.of(counts, resultList);
         }
+
+
+        if("rep905".equalsIgnoreCase(fileList.getTableName()) || "rep906".equalsIgnoreCase(fileList.getTableName())){
+            StringBuffer sqlStringBufferOther = new StringBuffer();
+            sqlStringBufferOther.append("select t1.* from ( select * ")
+                    .append(" from ").append(fileList.getTableName()).append(sqlWhereStringBuffer).append(" ) as t1 ")
+                    .append(" left join ( select * from distEx where 1 = 1 and distid like '")
+                    .append("0".equalsIgnoreCase(distNo) ? "%" : distNo + "%")
+                    .append("'")
+                    .append(" and tablename = '")
+                    .append(fileList.getTableName())
+                    .append("'")
+                    .append(" and years = ")
+                    .append(years)
+                    .append(") as t2 on t1.ztid = t2.ztid order by ")
+                    .append("isnull(t2.parent_id, t2.ztid), t2.ztTypeId");
+
+
+            if(CollectionUtils.isEmpty(sorts)) {
+                String sqlOrder = fileList.getOrderStr();
+
+                if(StringUtils.isEmpty(StringUtils.trimToEmpty(sqlOrder))) {
+                    sqlOrder = " ,t1.years, t1.distId" + (fileList.getFileItemLink() != null ? ",t1.lxid" : "");
+                    sqlOrder += ", t1.ztid, t1.id, t1.sumflag";
+                    sqlStringBufferOther.append(sqlOrder);
+                }
+            } else {
+                sqlStringBufferOther.append(",");
+                for (int i = 0; i < sorts.size(); i++) {
+                    if (sorts.get(i).indexOf(",") == -1) {
+                        if (i == sorts.size() - 1) {
+                            sqlStringBufferOther.append(sorts.get(i));
+                        } else {
+                            sqlStringBufferOther.append(sorts.get(i) + ", ");
+                        }
+
+                    } else {
+                        String sortString = sorts.get(i);
+                        sortString = sortString.replace(",", " ");
+                        if (i == sorts.size() - 1) {
+                            sqlStringBufferOther.append(sortString);
+                        } else {
+                            sqlStringBufferOther.append(sortString + ", ");
+                        }
+                    }
+                }
+
+            }
+
+            Query nativeQuery = entityManagerPrimary.createNativeQuery(sqlStringBufferOther.toString());
+            for (String parameterKey : parameterMap.keySet()) {
+                nativeQuery.setParameter(parameterKey, parameterMap.get(parameterKey));
+            }
+            nativeQuery.unwrap(NativeQueryImpl.class).setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP);
+            List<Map<String, Object>> resultList = nativeQuery.getResultList();
+            return (T) resultList;
+        }
+
+
+
 
         sqlStringBuffer.append(sqlOrderByStringBuffer);
         Query nativeQuery = entityManagerPrimary.createNativeQuery(sqlStringBuffer.toString());
@@ -441,6 +622,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
         String distNo = summaryDTO.getDistNo();
         String tableName = summaryDTO.getTableName();
         String typeCode = summaryDTO.getTypeCode();
+        String userDistNo = summaryDTO.getUserDistNo();
 
         if (StringUtils.isEmpty(tableName)) {
             tableName = "";
@@ -450,40 +632,69 @@ public class BaseDataManagerImpl implements BaseDataManager {
             distNo = "";
         }
 
-        Map<String, Object> parameter = new LinkedHashMap<>(16);
-        parameter.put("years", years);
-        parameter.put("months", months);
-        parameter.put("tableType", typeCode);
-        parameter.put("tableName", tableName);
-        parameter.put("distId", distNo);
+
+        /*Map<String, Object> parameter = new LinkedHashMap<>(16);
+        parameter.put("v_years", years);
+        parameter.put("v_months", months);
+        parameter.put("v_tableType", typeCode);
+        parameter.put("v_tableName", tableName);
+        parameter.put("v_distId", distNo);
 
         //4汇总当前地区，2当前地区和下级地区，1所有地区汇总
-        parameter.put("distType", 2);
+        parameter.put("v_distType", 2);
 
-        parameter.put("distLength", 0);
-        parameter.put("existsDataType", 1);
+        parameter.put("v_distLength", 0);
+        parameter.put("v_existsDataType", 1);
+
+        parameter.put("v_userDistNo", userDistNo);
 
         StoredProcedureQuery storedProcedureQuery = entityManagerPrimary.createStoredProcedureQuery("_sumData");
-        storedProcedureQuery.registerStoredProcedureParameter("years", Integer.class, ParameterMode.IN);
-        storedProcedureQuery.registerStoredProcedureParameter("months", Integer.class, ParameterMode.IN);
-        storedProcedureQuery.registerStoredProcedureParameter("tableType", String.class, ParameterMode.IN);
-        storedProcedureQuery.registerStoredProcedureParameter("tableName", String.class, ParameterMode.IN);
-        storedProcedureQuery.registerStoredProcedureParameter("distId", String.class, ParameterMode.IN);
-        storedProcedureQuery.registerStoredProcedureParameter("distType", Integer.class, ParameterMode.IN);
-        storedProcedureQuery.registerStoredProcedureParameter("distLength", Integer.class, ParameterMode.IN);
-        storedProcedureQuery.registerStoredProcedureParameter("existsDataType", Integer.class, ParameterMode.IN);
+        storedProcedureQuery.registerStoredProcedureParameter("v_years", Integer.class, ParameterMode.IN);
+        storedProcedureQuery.registerStoredProcedureParameter("v_months", Integer.class, ParameterMode.IN);
+        storedProcedureQuery.registerStoredProcedureParameter("v_tableType", String.class, ParameterMode.IN);
+        storedProcedureQuery.registerStoredProcedureParameter("v_tableName", String.class, ParameterMode.IN);
+        storedProcedureQuery.registerStoredProcedureParameter("v_distId", String.class, ParameterMode.IN);
+        storedProcedureQuery.registerStoredProcedureParameter("v_distType", Integer.class, ParameterMode.IN);
+        storedProcedureQuery.registerStoredProcedureParameter("v_distLength", Integer.class, ParameterMode.IN);
+        storedProcedureQuery.registerStoredProcedureParameter("v_existsDataType", Integer.class, ParameterMode.IN);
+
+        storedProcedureQuery.registerStoredProcedureParameter("v_userDistNo", String.class, ParameterMode.IN);
+
 
         for (String parameterKey : parameter.keySet()) {
             storedProcedureQuery.setParameter(parameterKey, parameter.get(parameterKey));
         }
-        boolean flag = storedProcedureQuery.execute();
+        boolean flag = storedProcedureQuery.execute();*/
+
+
+        StringBuilder sql = new StringBuilder("call _sumData(");
+        sql.append(years).append(", ");
+        sql.append(months).append(", ");
+        sql.append("'").append(typeCode).append("', ");
+        sql.append("'").append(tableName).append("', ");
+        sql.append("'").append(distNo).append("', ");
+        sql.append(2).append(", ");
+        sql.append(0).append(", ");
+        sql.append(1).append(", ");
+        sql.append("'").append(userDistNo).append("');");
+
 
         SummaryVO summaryVO = new SummaryVO();
-        summaryVO.setRvalue(flag);
+        summaryVO.setRvalue(false);
+
+        try {
+            jdbcTemplatePrimary.execute(sql.toString());
+            summaryVO.setRvalue(true);
+        }catch (Exception e){
+            throw e;
+        }
+
+//        summary2(summaryDTO);
         return summaryVO;
     }
 
     @Override
+    @Transactional(rollbackFor = Throwable.class)
     public List<CheckVO> check(TableType tableType, FileList fileList, Object[] ids, Integer years, Integer months, String distNo, Integer grade, Boolean isAllDist, Boolean isSb, Boolean isGrade) {
         List<CheckVO> rvalue = new ArrayList<>();
         StringBuffer upsql = new StringBuffer();
@@ -693,6 +904,17 @@ public class BaseDataManagerImpl implements BaseDataManager {
         }
 
         ExcelTemplate excelTemplate = excelTemplateManager.getExcelTemplateById(excelTemplateid);
+        String belongDistNo = excelTemplate.getBelongDistNo();
+        User user = SecurityUtil.getLoginUser();
+
+        //不为空则需要判断当前导入的模板 是否为该用户所属的模板
+        if(StringUtils.isNotBlank(belongDistNo)){
+            if(!user.getTjDistNo().startsWith(belongDistNo)
+                    || !belongDistNo.startsWith(user.getTjDistNo())){
+                throw new RuntimeException("用户:" + user.getUsername() + " 不能操作该模板!");
+            }
+        }
+
         String fileNamePath = rootPath + excelTemplate.getName();
         File file = new File(fileNamePath);
         if (!file.exists()) {
@@ -1009,6 +1231,47 @@ public class BaseDataManagerImpl implements BaseDataManager {
                                                 rvalue.put("errorRows", errorRows);
                                                 isContinue = false;
                                                 break OK;
+                                            }
+                                        } else if (StringUtils.equalsIgnoreCase(fileItem.getFType(), "S")){
+                                            if(StringUtils.isEmpty(cellValue)){
+                                                ImportExcelVO ie = new ImportExcelVO();
+                                                ie.setIsSuccess(false);
+                                                ie.setRow(rowIndex);
+                                                ie.setInfo("EXCEL第" + (templateInfo.getSheetIndex() + 1) + "表，第" + (rowIndex + 1) + "行,第" + (columnIndex + 1) + "列此不能为空，此条记录已跳过，不记入系统！");
+                                                excelInfo.add(ie);
+                                                rvalue.put("importExcel", excelInfo);
+                                                rvalue.put("successRows", successRows);
+                                                rvalue.put("errorRows", errorRows);
+                                                isContinue = false;
+                                                break OK;
+                                            } else {
+                                                //获取配置的选择项
+                                                String formatterSelect = fileItem.getFormatterSelect();
+                                                if(StringUtils.isEmpty(formatterSelect)){
+                                                    ImportExcelVO ie = new ImportExcelVO();
+                                                    ie.setIsSuccess(false);
+                                                    ie.setRow(rowIndex);
+                                                    ie.setInfo("EXCEL第" + (templateInfo.getSheetIndex() + 1) + "表，第" + (rowIndex + 1) + "行,第" + (columnIndex + 1) + "配置选项列表为空，此条记录已跳过，不记入系统！");
+                                                    excelInfo.add(ie);
+                                                    rvalue.put("importExcel", excelInfo);
+                                                    rvalue.put("successRows", successRows);
+                                                    rvalue.put("errorRows", errorRows);
+                                                    isContinue = false;
+                                                    break OK;
+                                                }
+                                                List<String> formatterSelectArrays = JSON.parseArray(formatterSelect, String.class);
+                                                if(!formatterSelectArrays.contains(StringUtils.trimToEmpty(cellValue))){
+                                                    ImportExcelVO ie = new ImportExcelVO();
+                                                    ie.setIsSuccess(false);
+                                                    ie.setRow(rowIndex);
+                                                    ie.setInfo("EXCEL第" + (templateInfo.getSheetIndex() + 1) + "表，第" + (rowIndex + 1) + "行,第" + (columnIndex + 1) + "列此【" + cellValue + "】不存在配置选项列表中，此条记录已跳过，不记入系统！");
+                                                    excelInfo.add(ie);
+                                                    rvalue.put("importExcel", excelInfo);
+                                                    rvalue.put("successRows", successRows);
+                                                    rvalue.put("errorRows", errorRows);
+                                                    isContinue = false;
+                                                    break OK;
+                                                }
                                             }
                                         }
                                         break;
@@ -1474,6 +1737,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
         String typeCode = existDataQuery.getTypeCode();
 
         User user = SecurityUtil.getLoginUser();
+        user.setDists(new ArrayList<>());
         String userDistNo = user.getTjDistNo();
         FileList fileList = fileListManager.getFileList(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, tableName, years, months, userDistNo);
 
@@ -1565,6 +1829,38 @@ public class BaseDataManagerImpl implements BaseDataManager {
         Map<String, Object> map = new HashMap<>(16);
         map.put("data", mapList);
         return map;
+    }
+
+
+
+    @Override
+    public List<FileList> listBaseTables(String typeCode, Integer years, Integer months) {
+        User user = SecurityUtil.getLoginUser();
+        String userDistNo = user.getTjDistNo();
+
+        List<FileList> fileLists = fileListManager.listFileListsOnly(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months);
+
+        List<FileList> collects = fileLists.stream().filter(fileList -> {
+            if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
+                    (fileList.getBelongDistNo().startsWith(userDistNo) || userDistNo.startsWith(fileList.getBelongDistNo()))) {
+                return true;
+            } else {
+                return false;
+            }
+        }).collect(Collectors.toList());
+
+
+        if(CollectionUtils.isEmpty(collects)){
+            throw new RuntimeException("未配置基础表！");
+        }
+
+        return collects;
+    }
+
+    @Override
+    public List<Integer> getDistAllGrade() {
+        List<Integer> distAllGrade = distManager.getDistAllGrade();
+        return distAllGrade;
     }
 
 
@@ -2617,5 +2913,899 @@ public class BaseDataManagerImpl implements BaseDataManager {
         String sql = "select mysql_fun, sql_fun, valuedec, sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
         rvalue = jdbcTemplatePrimary.queryForList(sql, new Object[]{ttype});
         return rvalue;
+    }
+
+
+
+    @Override
+    @Transactional(rollbackFor = Throwable.class)
+    public SummaryVO summaryCodingRun(SummaryDTO summaryDTO) {
+        Integer years = summaryDTO.getYears();
+        Integer months = summaryDTO.getMonths();
+        String distNo = summaryDTO.getDistNo();
+        String tableName = summaryDTO.getTableName();
+        String typeCode = summaryDTO.getTypeCode();
+        String userDistNo = summaryDTO.getUserDistNo();
+        String tableType = summaryDTO.getTypeCode();
+        Integer distType = summaryDTO.getDistType();
+
+
+        SumBaseDataDTO sumBaseDataDTO = new SumBaseDataDTO();
+        sumBaseDataDTO.setTableType(tableType);
+        sumBaseDataDTO.setYears(years);
+        sumBaseDataDTO.setMonths(months);
+        sumBaseDataDTO.setTableName(tableName);
+        sumBaseDataDTO.setDistId(distNo);
+        sumBaseDataDTO.setDistIdType(distType);
+
+
+
+        List<FileList> fileLists = new ArrayList<>();
+
+        SummaryVO summaryVO = new SummaryVO();
+        summaryVO.setRvalue(false);
+
+        List<Integer> grades = distManager.getDistAllGrade();
+
+        if ("0".equals(distNo)) {
+            distNo = "";
+            sumBaseDataDTO.setDistId("");
+        }
+
+        //如果汇总所有表
+        if (StringUtils.isEmpty(tableName)) {
+            fileLists = fileListManager.listFileLists(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, userDistNo);
+        } else {
+            fileLists.add(fileListManager.getFileList(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, tableName, years, months, userDistNo));
+        }
+
+        //当前年份所有地区级别
+//        Set<Integer> listDistGrades = distManager.listDistGrades(years);
+
+        //汇总类型  默认是2
+        if(distType == null){
+            distType = 2;
+            sumBaseDataDTO.setDistIdType(2);
+        }
+
+        //查询最大长度
+//        int maxDistLen = distManager.getMaxDistNoLength(distNo, years, 1);
+        int maxDistLen = distManager.getCurrMaxDistNoLength(distNo, years);
+
+        if(distType == 4){
+            if(StringUtils.isBlank(distNo)){
+                maxDistLen = distManager.getCurrMaxDistNoLength("0", years);
+            }
+        }
+
+
+        //是否存在数据
+        Boolean isExistsDataType = true;
+
+        //是否存在类型
+        Boolean isExistsLx = false;
+
+
+
+
+        try {
+//            log.info("开始汇总数据。。。");
+
+            for(FileList tempFileList : fileLists){
+                StringBuilder columns = new StringBuilder();
+                StringBuilder sumColumns = new StringBuilder();
+                String fileListTableName = tempFileList.getTableName();
+
+//                log.info("(typeCode: {}, years: {}, months: {}, fileName: {}, distNo: {})  开始汇总。。。", typeCode, years, months, fileListTableName, distNo);
+
+                if(Objects.isNull(tempFileList.getFileItemLink())){
+                    isExistsLx = false;
+                } else {
+                    isExistsLx = true;
+                }
+
+                List<FileItem> fileItems = tempFileList.getFileItems();
+
+                //没有启用或者不是数值类型的不汇总
+                fileItems = fileItems.stream().filter(e -> {
+                    if(Objects.isNull(e.getDisFlag())
+                            || !"1".equalsIgnoreCase(e.getDisFlag())
+                            || !"N".equalsIgnoreCase(e.getFType())){
+                        return false;
+                    }
+                    return true;
+                }).collect(Collectors.toList());
+
+
+                List<String> columnsList = fileItems.stream().map(FileItem::getFieldName).collect(Collectors.toList());
+                List<String> sumColumnsList = fileItems.stream().map(fileItem -> "sum(" + fileItem.getFieldName() + ") as " + fileItem.getFieldName()).collect(Collectors.toList());
+
+                //汇总基础数据的字段
+                columns.append(String.join(",", columnsList));
+                sumColumns.append(String.join(",", sumColumnsList));
+
+
+                Boolean tempBit = false;
+                if(distType == 4){
+                    tempBit = true;
+                }
+
+                if(distType == 1 || distType == 2 || distType == 4){
+                    if(isExistsDataType){
+                        //拼接删除sql语句
+                        StringBuilder deleteSql = new StringBuilder();
+                        deleteSql.append("delete from ")
+                                .append(fileListTableName)
+                                .append(" where years = ")
+                                .append(years);
+
+                        if (months != null && months != 0){
+                            deleteSql.append(" and months = ").append(months);
+                        }
+
+                        deleteSql.append(" and saveFlag<>'是' and sumFlag='是' ");
+
+                        if(distType == 4){
+                            if(StringUtils.isBlank(distNo)){
+                                deleteSql.append(" and distId = ").append("'0'");
+                            } else {
+                                deleteSql.append(" and distId = ")
+                                        .append("'")
+                                        .append(distNo)
+                                        .append("'");
+                            }
+                        } else {
+                            deleteSql.append(" and distId like ")
+                                    .append("'")
+                                    .append(distNo)
+                                    .append("%'");
+                        }
+
+                        if(isExistsLx){
+                            deleteSql.append(" and (charindex('汇总数',lxname) <> 0 or (select count(*) from ")
+                                    .append(fileListTableName)
+                                    .append(" aaa where aaa.years = ")
+                                    .append(fileListTableName)
+                                    .append(".years");
+
+                            if(months != null && months != 0){
+                                deleteSql.append(" and months = ").append(months);
+                            }
+
+                            deleteSql.append(" and aaa.lx = ")
+                                    .append(fileListTableName)
+                                    .append(".lx and aaa.distId <> ")
+                                    .append(fileListTableName)
+                                    .append(".distId and aaa.distId like ")
+                                    .append(fileListTableName)
+                                    .append(".distId || '%' ) > 0 or (lxname = distname || lx and (select count(*) from ")
+                                    .append(fileListTableName)
+                                    .append(" aa where years = ")
+                                    .append(years);
+
+                            if(months != null && months != 0){
+                                deleteSql.append(" and months = ").append(months);
+                            }
+
+                            deleteSql.append(" and distId = ")
+                                    .append(fileListTableName)
+                                    .append(".distId and aa.lx=")
+                                    .append(fileListTableName)
+                                    .append(".lx) > 1))");
+
+                        } else {
+                            deleteSql.append(" and ((select count(*) from ")
+                                    .append(fileListTableName)
+                                    .append(" aaa where aaa.years = ")
+                                    .append(fileListTableName)
+                                    .append(".years and ")
+                                    .append(" aaa.distId <> ")
+                                    .append(fileListTableName)
+                                    .append(".distId and aaa.distId like ")
+                                    .append(fileListTableName)
+                                    .append(".distId || '%') > 0)");
+                        }
+
+                        //删除基础数据
+//                        log.info("执行语句：{}", deleteSql.toString());
+                        jdbcTemplatePrimary.update(deleteSql.toString());
+
+
+                        //基础模式
+                        int tempInt = maxDistLen;
+
+                        for(int i = grades.size() - 2; i >= 0; i--){
+                            if(distNo.length() <= tempInt){
+
+                                sumBaseDataDTO.setTableName(fileListTableName);
+                                sumBaseDataDTO.setColumns(columns.toString());
+                                sumBaseDataDTO.setSumColumns(sumColumns.toString());
+                                sumBaseDataDTO.setDistIdInt(tempInt);
+                                sumBaseDataDTO.setMaxDistIdInt(maxDistLen);
+                                sumBaseDataDTO.setDistIdLen(0);
+                                sumBaseDataDTO.setDistIdType(1);
+                                sumBaseDataDTO.setLx("");
+                                sumBaseDataDTO.setIsHzsOtherLx(false);
+                                sumBaseDataDTO.setExistsDataType(isExistsDataType);
+                                sumBaseDataDTO.setIsExistsLx(isExistsLx);
+                                sumBaseDataDTO.setLinkDist(tempBit);
+                                sumBaseDataDTO.setParentLx("");
+
+                                if(tempInt == 1){
+                                    sumOffBeat(sumBaseDataDTO);
+                                } else {
+                                    sumBaseData(sumBaseDataDTO);
+                                }
+
+                                if(isExistsLx){
+                                    String parentLxsSql = "select parentLx,parentLxId " +
+                                            "from (select parentLx,(select lxid from lxorder a where a.lx=lxorder.parentLx " +
+                                            "and a.years=lxorder.years and a.typecode=lxorder.typecode) parentLxId " +
+                                            "from lxorder where years=? and typecode=? and parentlx is not null and parentLx<>'' " +
+                                            "group by parentlx,years,typeCode) aaa order by parentLxId desc";
+
+                                    List<String> parentLx = jdbcTemplatePrimary.queryForList(parentLxsSql, new Object[]{years, tableType}, String.class);
+//                                List<String> parentLx = jdbcTemplatePrimary.queryForList(parentLxsSql, String.class);
+                                    if(!CollectionUtils.isEmpty(parentLx)){
+                                        for (String lx : parentLx) {
+                                            sumBaseDataDTO.setParentLx(lx);
+                                            if(tempInt == 1){
+                                                sumOffBeat(sumBaseDataDTO);
+                                            } else {
+                                                sumBaseData(sumBaseDataDTO);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            tempInt = grades.get(i);
+                        }
+
+                        //经济社汇总数
+                        //汇总数
+                        if(isExistsLx){
+
+                            sumBaseDataDTO.setDistIdLen(0);
+                            sumBaseDataDTO.setDistIdType(0);
+                            sumBaseDataDTO.setLx("汇总数");
+                            sumBaseDataDTO.setIsHzsOtherLx(true);
+                            sumBaseDataDTO.setParentLx("");
+
+                            if(StringUtils.isBlank(distNo)){
+                                sumOffBeat(sumBaseDataDTO);
+                                sumBaseDataDTO.setIsHzsOtherLx(false);
+                                sumOffBeat(sumBaseDataDTO);
+                            }else{
+                                sumBaseData(sumBaseDataDTO);
+                                sumBaseDataDTO.setIsHzsOtherLx(false);
+                                sumBaseData(sumBaseDataDTO);
+                            }
+                        }
+                    }
+                }
+
+                StringBuilder updateSql = new StringBuilder();
+                updateSql.append("update ")
+                        .append(fileListTableName)
+                        .append(" set gradeId=dist.distType from dist where ")
+                        .append(fileListTableName)
+                        .append(".years=dist.years and ")
+                        .append(fileListTableName)
+                        .append(".years = ")
+                        .append(years)
+                        .append(" and ")
+                        .append(fileListTableName)
+                        .append(".distId = dist.distId and ")
+                        .append(fileListTableName)
+                        .append(".distId");
+
+                if(distType == 4){
+                    updateSql.append(" = ")
+                            .append("'")
+                            .append(distNo)
+                            .append("'");
+                } else {
+                    updateSql.append(" like ")
+                            .append("'")
+                            .append(distNo)
+                            .append("%'");
+                }
+
+//                log.info("执行语句：{}", updateSql.toString());
+                jdbcTemplatePrimary.update(updateSql.toString());
+
+                StringBuffer dataProcessSql = new StringBuffer();
+                dataProcessSql.append("select processSql from dataProcess where hzRun = 1 and tableType = '")
+                        .append(tableType)
+                        .append("' and years = ")
+                        .append(years)
+                        .append(" and (tableName = '")
+                        .append(fileListTableName)
+                        .append("' or isnull(tableName,'') = '' or tableName = '')")
+                        .append(" order by orderId");
+
+
+                List<String> dataProcessList = jdbcTemplatePrimary.queryForList(dataProcessSql.toString(), String.class);
+                if(!CollectionUtils.isEmpty(dataProcessList)){
+                    for (String temp : dataProcessList) {
+                        String newTemp = temp.replaceAll(":年", years.toString())
+                                .replaceAll(":月", months.toString())
+                                .replaceAll(":地区", distNo)
+                                .replaceAll(":id", "0")
+                                .replaceAll("#tableType#", tableType)
+                                .replaceAll("#distType#", distType.toString());
+                        jdbcTemplatePrimary.update(newTemp);
+                    }
+                }
+            }
+
+            summaryVO.setRvalue(true);
+        }catch (Exception e){
+            throw e;
+        }
+
+        return summaryVO;
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public void sumBaseData(SumBaseDataDTO sumBaseDataDTO){
+        String tableType = sumBaseDataDTO.getTableType();
+        Integer years = sumBaseDataDTO.getYears();
+        Integer months = sumBaseDataDTO.getMonths();
+        String tableName = sumBaseDataDTO.getTableName();
+        String distId = sumBaseDataDTO.getDistId();
+        String columns = sumBaseDataDTO.getColumns();
+        String sumColumns = sumBaseDataDTO.getSumColumns();
+        Integer distIdInt = sumBaseDataDTO.getDistIdInt();
+        Integer maxDistIdInt = sumBaseDataDTO.getMaxDistIdInt();
+        Integer distIdLen = sumBaseDataDTO.getDistIdLen();
+        Integer distIdType = sumBaseDataDTO.getDistIdType();
+        String lx = sumBaseDataDTO.getLx();
+        Boolean isHzsOtherLx = sumBaseDataDTO.getIsHzsOtherLx();
+        Boolean existsDataType = sumBaseDataDTO.getExistsDataType();
+        Boolean isExistsLx = sumBaseDataDTO.getIsExistsLx();
+        Boolean linkDist = sumBaseDataDTO.getLinkDist();
+        String parentLx = sumBaseDataDTO.getParentLx();
+
+        StringBuilder insert = new StringBuilder();
+        insert.append("insert into ").append(tableName).append(" (years, ");
+
+        if(months != null && months != 0){
+            insert.append(" months, ");
+        }
+
+        insert.append("saveFlag,sumFlag,balFlag,distId,distName,");
+        if(isExistsLx){
+            insert.append("lx,lxname,lxid,");
+        }
+        insert.append(columns).append(" ) select ").append(years).append(" as years, ");
+        if(months != null && months != 0){
+            insert.append(months).append(" as months, ");
+        }
+        insert.append("'否' as saveFlag,'是' as sumFlag,'否' as balFlag,");
+
+        if(!"汇总数".equalsIgnoreCase(lx)){
+            insert.append(" left(distId, ")
+                    .append(distIdInt)
+                    .append(") as distId, (select top 1 distName from dist where years = ")
+                    .append(years)
+                    .append(" and distId = left(")
+                    .append(tableName)
+                    .append(".distId,").append(distIdInt).append(")) as distName ");
+
+            if(isExistsLx){
+                if(StringUtils.isBlank(parentLx)){
+                    insert.append(", lx");
+                } else {
+                    insert.append(", '").append(parentLx).append("' as lx");
+                }
+
+                insert.append(", CONCAT((select top 1 distName from dist where years = ")
+                        .append(years)
+                        .append(" and distId = left(")
+                        .append(tableName)
+                        .append(".distId,")
+                        .append(distIdInt)
+                        .append(")), ");
+
+                if(StringUtils.isBlank(parentLx)){
+                    insert.append(" lx )");
+                } else {
+                    insert.append("'").append(parentLx).append("')");
+                }
+
+                insert.append(" as lxname,(select lxid from lxorder where typeCode = '")
+                        .append(tableType)
+                        .append("' and years= ")
+                        .append(years);
+
+                if(StringUtils.isBlank(parentLx)){
+                    insert.append(" and lx = ").append(tableName).append(".lx) as lxid");
+                } else {
+                    insert.append(" and lx = '").append(parentLx).append("') as lxid ");
+                }
+            }
+        } else {
+            insert.append(" distId,distName ");
+
+            if(isExistsLx){
+                insert.append(" , ");
+
+                if(!isHzsOtherLx){
+                    insert.append("'汇总数' as ");
+                }
+                insert.append(" lx,distName ");
+
+                if(isHzsOtherLx){
+                    insert.append("|| lx");
+                }
+
+                insert.append("|| '汇总数' as lxname,(select lxid from lxorder where typeCode='")
+                        .append(tableType)
+                        .append("' and years = ")
+                        .append(years)
+                        .append(" and lx = ");
+
+                if(!isHzsOtherLx){
+                    insert.append("'汇总数'");
+                } else {
+                    insert.append(tableName)
+                            .append(".lx");
+                }
+                insert.append(") as lxid");
+
+            }
+        }
+
+        insert.append(", ")
+                .append(sumColumns)
+                .append(" from ")
+                .append(tableName)
+                .append(" where distId like '")
+                .append(distId)
+                .append("%'");
+
+        if(isExistsLx){
+            if((isHzsOtherLx || StringUtils.isBlank(lx)) && StringUtils.isBlank(parentLx)){
+                insert.append(" and isnull(charindex('汇总数', lxname), 0) = 0");
+            } else {
+                insert.append(" and (isnull(charindex('汇总数',lxname), 0) = 0 or lx in (select parentLx from lxorder where years= ")
+                        .append(years)
+                        .append(" and typeCode = '")
+                        .append(tableType)
+                        .append("' and parentLx is not null and parentLx <> ''))");
+            }
+
+            if(StringUtils.isBlank(parentLx)
+                    && !isHzsOtherLx
+                    && "汇总数".equalsIgnoreCase(lx)){
+                insert.append("  and lx not in (select lx from lxorder where years = ")
+                        .append(years)
+                        .append(" and typeCode = '")
+                        .append(tableType)
+                        .append("' and parentLx is not null and parentLx <> '')");
+            }
+        }
+
+        insert.append(" and years = ").append(years);
+
+
+        if(!"汇总数".equalsIgnoreCase(lx)){
+            insert.append(" and len(distId) = ");
+            if(distIdType == 0){
+                insert.append(distIdInt);
+            } else if (distIdType == 1) {
+                if(distIdInt < maxDistIdInt){
+                    insert.append("(select top 1 LEN(distId) from dist where LEN(distId)>")
+                            .append(distIdInt)
+                            .append(" + 1 group by LEN(distId) order by LEN(distId))");
+                } else {
+                    insert.append(distIdInt);
+                }
+            } else if (distIdType == 2 || linkDist) {
+                insert.append(maxDistIdInt);
+            } else if (distIdType == 3){
+                insert.append(distIdLen);
+            }
+        } else {
+            if(linkDist){
+                insert.append(" and len(distId) = ").append(distId.length());
+            }
+        }
+
+        if(StringUtils.isNotBlank(lx) && !"汇总数".equalsIgnoreCase(lx) && isExistsLx){
+            insert.append(" and lx = '").append(lx).append("'");
+        }
+
+        if(months != null && months != 0){
+            insert.append(" and months = ").append(months);
+        }
+
+        if(!"汇总数".equalsIgnoreCase(lx)){
+            if(isExistsLx){
+                insert.append(" and not exists ( select concat(distId, lx) from ")
+                        .append(tableName);
+            } else {
+                insert.append(" and left(distId, ")
+                        .append(distIdInt)
+                        .append(") not in (select distId from ")
+                        .append(tableName);
+            }
+
+            insert.append(" aa where years = ")
+                    .append(years)
+                    .append(" and distId like '")
+                    .append(distId)
+                    .append("%'");
+
+            if(months != null && months != 0){
+                insert.append(" and months = ").append(months);
+            }
+
+            if(StringUtils.isNotBlank(lx) && isExistsLx){
+                insert.append(" and lx = '")
+                        .append(lx)
+                        .append("'");
+            }
+
+            if(isExistsLx){
+                insert.append(" and aa.distId = left(")
+                        .append(tableName)
+                        .append(".distId, ")
+                        .append(distIdInt)
+                        .append(") and aa.lx = ");
+
+                if(StringUtils.isBlank(parentLx)){
+                    insert.append(tableName).append(".lx");
+                } else {
+                    insert.append("'")
+                            .append(parentLx)
+                            .append("'");
+                }
+            }
+
+            insert.append(")");
+
+            //基础模式
+            if (isExistsLx && StringUtils.isBlank(lx) && StringUtils.isBlank(parentLx)){
+
+                insert.append("and lx not in (select lx from lxorder where years=")
+                        .append(years)
+                        .append(" and typecode = '")
+                        .append(tableType)
+                        .append("' and not (parentLx is null or parentLx = ''))");
+            }
+
+
+            //村级汇总数
+            if(isExistsLx && StringUtils.isBlank(lx) && StringUtils.isNotBlank(parentLx)){
+
+                insert.append(" and lx in (select lx from lxorder where years = ")
+                        .append(years)
+                        .append(" and typecode = '")
+                        .append(tableType)
+                        .append("' and parentLx = '")
+                        .append(parentLx)
+                        .append("' union select '")
+                        .append(parentLx)
+                        .append("' lx where not exists(select id from ")
+                        .append(tableName)
+                        .append(" where years = ")
+                        .append(years);
+
+                if(months != null && months != 0){
+                    insert.append(" and months = ").append(months);
+                }
+
+                insert.append(" and distId like '")
+                        .append(distId)
+                        .append("%' and len(distId) = ");
+
+                if(distIdType == 0){
+                    insert.append(distIdInt);
+                } else if (distIdType == 1) {
+                    if(distIdInt < maxDistIdInt){
+                        insert.append(" (select top 1 LEN(distId) from dist where LEN(distId)>")
+                                .append(distIdInt)
+                                .append(" + 1 group by LEN(distId) order by LEN(distId))");
+                    } else {
+                        insert.append(distIdInt);
+                    }
+                } else if (distIdType == 2 || linkDist) {
+                    insert.append(maxDistIdInt);
+                } else if (distIdType == 3){
+                    insert.append(distIdLen);
+                }
+
+                insert.append(" and lx in (select lx from lxorder where years=")
+                        .append(years)
+                        .append(" and typeCode = '")
+                        .append(tableType)
+                        .append("' and parentLx = '")
+                        .append(parentLx)
+                        .append("')))");
+            }
+
+            insert.append(" group by left(distId,").append(distIdInt).append(")");
+
+            if(isExistsLx && StringUtils.isBlank(parentLx)){
+                insert.append(", lx");
+            }
+
+        } else {
+            if(!isHzsOtherLx){
+                insert.append(" and CONCAT(distId,'汇总数') not in (select CONCAT(distId,'汇总数')");
+            } else {
+                insert.append("and not exists (select CONCAT(distId,lxname)");
+            }
+
+            insert.append(" from ").append(tableName).append(" aa where years = ").append(years);
+
+            if(months != null && months != 0){
+                insert.append(" and months = ").append(months);
+            }
+
+            insert.append(" and distId like '").append(distId).append("%' and charindex('汇总数',lxname)<>0");
+
+            if(isExistsLx){
+                if(!isHzsOtherLx){
+                    insert.append(" and lx = '").append(lx).append("'");
+                } else {
+                    insert.append(" and lx = ")
+                            .append(tableName)
+                            .append(".lx and distId = ")
+                            .append(tableName)
+                            .append(".distId");
+                }
+            }
+
+            insert.append(")");
+
+            if(isHzsOtherLx){
+                insert.append(" and (select count(*) from ")
+                        .append(tableName)
+                        .append(" bb where bb.years = ")
+                        .append(years);
+
+                if(months != null && months != 0){
+                    insert.append(" and bb.months = ").append(months);
+                }
+
+                insert.append(" and bb.lx = ")
+                        .append(tableName)
+                        .append(".lx and bb.distId = ")
+                        .append(tableName)
+                        .append(".distId) > 1");
+            }
+
+            if(isHzsOtherLx){
+                insert.append(" and lx not in (select lx from lxorder where not (parentLx is null or parentLx=''))");
+            }
+
+            insert.append(" group by distId,distName ");
+
+            if(isHzsOtherLx){
+                insert.append(" ,lx");
+            }
+        }
+
+        try {
+//            log.info("执行语句：{}", insert.toString());
+            jdbcTemplatePrimary.update(insert.toString());
+        } catch (Exception exception) {
+            throw exception;
+        }
+
+    }
+
+
+
+    public void sumOffBeat(SumBaseDataDTO sumBaseDataDTO){
+
+     String tableType = sumBaseDataDTO.getTableType();
+     Integer years = sumBaseDataDTO.getYears();
+     Integer months = sumBaseDataDTO.getMonths();
+     String tableName = sumBaseDataDTO.getTableName();
+     String distId = sumBaseDataDTO.getDistId();
+     String columns = sumBaseDataDTO.getColumns();
+     String sumColumns = sumBaseDataDTO.getSumColumns();
+     Integer distIdInt = sumBaseDataDTO.getDistIdInt();
+     Integer maxDistIdInt = sumBaseDataDTO.getMaxDistIdInt();
+     Integer distIdLen = sumBaseDataDTO.getDistIdLen();
+     Integer distIdType = sumBaseDataDTO.getDistIdType();
+     String lx = sumBaseDataDTO.getLx();
+     Boolean isHzsOtherLx = sumBaseDataDTO.getIsHzsOtherLx();
+     Boolean existsDataType = sumBaseDataDTO.getExistsDataType();
+     Boolean isExistsLx = sumBaseDataDTO.getIsExistsLx();
+     Boolean linkDist = sumBaseDataDTO.getLinkDist();
+     String parentLx = sumBaseDataDTO.getParentLx();
+
+
+
+        StringBuilder insert = new StringBuilder();
+        StringBuilder colSql = new StringBuilder();
+        StringBuilder sql = new StringBuilder();
+
+        insert.append("insert into ").append(tableName).append(" (years, ");
+        if(months != null && months != 0){
+            insert.append(" months, ");
+        }
+        insert.append("saveFlag,sumFlag,balFlag,distId,distName,");
+        if(isExistsLx){
+            insert.append("lx,lxname,lxid,");
+        }
+        insert.append(columns).append(") ");
+
+        colSql.append("select years, ");
+        sql.append("select years, ");
+
+        if(months != null && months != 0){
+            colSql.append("months, ");
+            sql.append("months, ");
+        }
+
+
+        colSql.append("'否' as saveFlag,'是' as sumFlag,'否' as balFlag, ");
+        sql.append("'否' as saveFlag,'是' as sumFlag,'否' as balFlag, ");
+
+
+        if(!"汇总数".equalsIgnoreCase(lx)){
+            colSql.append("distid,distName");
+            sql.append("(select distid from dist where years=")
+                    .append(years)
+                    .append(" and LENGTH(distid)=")
+                    .append(distIdInt)
+                    .append(" LIMIT 1) as distId,(select distName from dist where years=")
+                    .append(years)
+                    .append(" and LENGTH(distId)=")
+                    .append(distIdInt)
+                    .append(" LIMIT 1) as distName ");
+
+            if (isExistsLx){
+                if (StringUtils.isBlank(parentLx)){
+                    colSql.append(", lx");
+                    sql.append(", lx");
+                } else {
+                    colSql.append(", '").append(parentLx).append("' as lx");
+                    sql.append(", '").append(parentLx).append("' as lx");
+                }
+
+                sql.append(",CONCAT((select distName from dist where years=")
+                        .append(years)
+                        .append(" and len(distId)=")
+                        .append(distIdInt)
+                        .append(" LIMIT 1),");
+
+                if(StringUtils.isBlank(parentLx)){
+                    sql.append(" lx");
+                } else {
+                    sql.append(" '").append(parentLx).append("'");
+                }
+
+                colSql.append(",lxname,lxid");
+                sql.append(") as lxname,(select lxid from lxorder where typeCode='")
+                        .append(tableType)
+                        .append("' and years = ")
+                        .append(years);
+
+                if(StringUtils.isBlank(parentLx)){
+                    sql.append(" and lx=")
+                            .append(tableName)
+                            .append(".lx) as lxid");
+                } else {
+                    sql.append(" and lx='")
+                            .append(parentLx)
+                            .append("') as lxid");
+                }
+            }
+        } else {
+            sql.append("distId,distName");
+
+            if(isExistsLx){
+                sql.append(" , ");
+
+                if(!isHzsOtherLx){
+                    sql.append("'汇总数' as ");
+                }
+
+                sql.append(" lx,CONCAT(distName ");
+
+                if(isHzsOtherLx){
+                    sql.append(", lx");
+                }
+
+                sql.append(", '汇总数') as lxname,(select lxid from lxorder where typeCode='")
+                        .append(tableType)
+                        .append("' and years = ")
+                        .append(years)
+                        .append(" and lx = ");
+
+                if(!isHzsOtherLx){
+                    sql.append("'汇总数'");
+                } else {
+                    sql.append(tableName)
+                            .append(".lx");
+                }
+                sql.append(") as lxid");
+            }
+        }
+
+        colSql.append(" , ").append(sumColumns).append(" from (");
+        sql.append(" , ").append(sumColumns).append(" from ( ").append(tableName);
+
+        if ("汇总数".equalsIgnoreCase(lx)){
+            sql.append(" left join ");
+
+            if(isExistsLx){
+                sql.append(" (select distId as rdistid,lx as rlx from ").append(tableName);
+            } else {
+                sql.append(" (select distId as rdistid from ").append(tableName);
+            }
+
+            sql.append(" aa where years=")
+                    .append(years)
+                    .append(" and distId like case when '")
+                    .append(distId)
+                    .append("' = '0' then  '%' else '")
+                    .append(distId).append("%' end ");
+
+
+            if(months != null && months != 0){
+                sql.append(" and months = ").append(months);
+            }
+
+            if(isExistsLx && StringUtils.isNotBlank(lx)){
+                sql.append(" and lx = '").append(lx).append("'");
+            }
+
+            sql.append(" ) rr");
+
+            if(isExistsLx){
+                sql.append(" on ifnull(LENGTH(left(")
+                        .append(tableName)
+                        .append(".distid,")
+                        .append(distIdInt)
+                        .append(" )),0)=ifnull(LENGTH(rr.rdistid),0) and ");
+                if (StringUtils.isBlank(parentLx)){
+                    sql.append(tableName).append(".lx=rr.rlx");
+                } else {
+                    sql.append(" rr.rlx='").append(parentLx).append("'");
+                }
+            } else {
+                sql.append(" on ifnull(LENGTH(left('")
+                        .append(tableName)
+                        .append(".distid,")
+                        .append(distIdInt)
+                        .append(" )),0)=ifnull(LENGTH(rr.rdistid),0)");
+            }
+
+        }
+
+        sql.append(" where  years=")
+                .append(years)
+                .append(" and distId like case when '")
+                .append(distId).append("' = '0' then '%' else '").append(distId).append("%' end");
+
+        if (isExistsLx){
+            if((isHzsOtherLx || StringUtils.isBlank(lx)) && StringUtils.isBlank(parentLx)){
+                sql.append(" and instr(lxname,''汇总数'') = 0 ");
+            } else {
+                sql.append(" and (instr(lxname,''汇总数'')=0 or lx in (select parentLx from lxorder where years = ")
+                        .append(years)
+                        .append(" and typeCode='")
+                        .append(tableType)
+                        .append("' and parentLx is not null and parentLx<>''))");
+            }
+
+            if (StringUtils.isBlank(parentLx) && !isHzsOtherLx && "汇总数".equalsIgnoreCase(lx)){
+                sql.append(" and lx not in (select lx from lxorder where years=")
+                        .append(years)
+                        .append(" and typeCode='")
+                        .append(tableType)
+                        .append("' and parentLx is not null and parentLx<>'')");
+            }
+        }
+
     }
 }

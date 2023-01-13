@@ -1,6 +1,8 @@
 package com.bright.stats.service.impl;
 
+import com.bright.common.result.PageResult;
 import com.bright.stats.manager.DistManager;
+import com.bright.stats.pojo.query.DistExQuery;
 import com.bright.stats.pojo.vo.DistVO;
 import com.bright.stats.service.DistService;
 import com.bright.stats.util.DataConstants;
@@ -8,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,13 +33,16 @@ public class DistServiceImpl implements DistService {
         if ("0".equals(distNo)) {
             distNo = "%";
         }
+
         int[] distGrades = DataConstants.distGrades;
         Set<Integer> distGradesSet = distManager.listDistGrades(years);
         List<Integer> distGIntegers = distGradesSet.stream().collect(Collectors.toList());
 
-        if(distGrades.length != distGIntegers.size()){
+        //暂时不需要判断 以后地区级别都是根据年份查询
+        //DataConstants.distGrades 废弃
+        /*if(distGrades.length != distGIntegers.size()){
             throw new RuntimeException("获取地区长度集合异常！");
-        }
+        }*/
 
         int i = distGIntegers.indexOf(distNo.length());
 

@@ -6,10 +6,14 @@ import com.bright.stats.service.DistService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 import java.util.List;
 
 /**
@@ -19,6 +23,7 @@ import java.util.List;
  */
 @Api(tags = "地区接口")
 @RestController
+@Validated
 @RequestMapping("/dist")
 @RequiredArgsConstructor
 public class DistController {
@@ -27,7 +32,8 @@ public class DistController {
 
     @ApiOperation(value = "获取地区树数据")
     @GetMapping("/distTree/list")
-    public Result listDistTrees(Integer years, String distNo){
+    public Result listDistTrees(@NotNull(message = "年份不能为空") Integer years
+            , @NotBlank(message = "地区编号不能为空") String distNo){
         String userDistNo = "";
         List<DistVO> distVOS = distService.listDistTrees(years, userDistNo, distNo);
         return Result.success(distVOS);

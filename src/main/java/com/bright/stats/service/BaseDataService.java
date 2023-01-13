@@ -3,6 +3,7 @@ package com.bright.stats.service;
 import com.bright.common.result.PageResult;
 import com.bright.stats.pojo.dto.*;
 import com.bright.stats.pojo.model.TableHeader;
+import com.bright.stats.pojo.po.primary.FileList;
 import com.bright.stats.pojo.po.primary.TableType;
 import com.bright.stats.pojo.po.primary.UploadBase;
 import com.bright.stats.pojo.po.second.User;
@@ -66,6 +67,13 @@ public interface BaseDataService {
     SummaryVO summary(SummaryDTO summaryDTO);
 
     /**
+     * 汇总
+     * @param summaryDTO 汇总参数
+     * @return 汇总结果
+     */
+    SummaryVO summaryCodingRun(SummaryDTO summaryDTO);
+
+    /**
      * 稽核
      * @param checkDTO 稽核参数
      * @return 稽核结果
@@ -86,7 +94,7 @@ public interface BaseDataService {
      * @param user 当前用户
      * @return 是否上报或者退回数据相关的描述
      */
-    List<String> reportOrWithdraw(String dpName, String keyword, User user);
+    List<InteractiveVO> reportOrWithdraw(String dpName, String keyword, User user);
 
     /**
      * 获取excel模板列表
@@ -96,6 +104,15 @@ public interface BaseDataService {
      * @return excel模板列表
      */
     List<ExcelTemplateVO> listExcelTemplates(Integer years, String typeCode, String username);
+
+    /**
+     * 获取excel模板列表
+     * @param years 年份
+     * @param typeCode 模式/表名称
+     * @param username 用户名称
+     * @return excel模板列表
+     */
+    List<ExcelTemplateVO> listExcelTemplates(Integer years, String typeCode, String username, String userDistNo);
 
     /**
      * 按模板导出Excel
@@ -119,4 +136,48 @@ public interface BaseDataService {
     Map<String, Object> listExistData(ExistDataQuery existDataQuery);
 
     Map<String, Object> getPreviousYearData(String typeCode, String tableName, Integer years, Integer months, String paramJson);
+
+    /**
+     * 获取基本表列表
+     * @param typeCode
+     * @param years
+     * @param months
+     * @return
+     */
+    List<FileList> listBaseTables(String typeCode, Integer years, Integer months);
+
+    /**
+     * 获取地区所有级别
+      * @return
+     */
+    List<Integer> getDistAllGrade();
+
+    /**
+     * 初始化上报数据
+     * @param initUploadDataDTO
+     * @return
+     */
+    Boolean initUploadData(InitUploadDataDTO initUploadDataDTO);
+
+
+    /**
+     * 根据主题校验正在运行的操作
+     * @param mqMessagesDTO
+     * @return
+     */
+    Boolean checkRunning(MqMessagesDTO mqMessagesDTO);
+
+    /**
+     * 根据地区编号检查当前地区上下级是否存在运行的任务
+     * @param mqMessagesDTO
+     * @return
+     */
+    Boolean checkRunningByDist(MqMessagesDTO mqMessagesDTO);
+
+
+    /**
+     *
+     * @param mqMessagesDTO
+     */
+    void checkRuningAll(MqMessagesDTO mqMessagesDTO);
 }

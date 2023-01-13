@@ -42,6 +42,13 @@ public interface BaseDataManager {
     SummaryVO summary(SummaryDTO summaryDTO);
 
     /**
+     * 汇总
+     * @param summaryDTO 汇总参数
+     * @return 汇总结果
+     */
+    SummaryVO summaryCodingRun(SummaryDTO summaryDTO);
+
+    /**
      * 稽核
      * @param tableType
      * @param fileList
@@ -64,4 +71,20 @@ public interface BaseDataManager {
     Map<String, Object> listExistData(ExistDataQuery existDataQuery);
 
     Map<String, Object> getPreviousYearData(String typeCode, String tableName, Integer years, Integer months, String paramJson);
+
+    /**
+     *
+     * @param typeCode
+     * @param years
+     * @param months
+     * @return
+     */
+    List<FileList> listBaseTables(String typeCode, Integer years, Integer months);
+
+
+    /**
+     * 获取地区所有级别
+     * @return
+     */
+    List<Integer> getDistAllGrade();
 }

@@ -3,8 +3,10 @@ package com.bright.stats.util;
 import net.sf.excelutils.ExcelException;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.springframework.util.ClassUtils;
 
 import javax.servlet.ServletContext;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -18,10 +20,12 @@ public class ExcelUtilPOI {
 		InputStream in = null;
 		HSSFWorkbook wb = null;
 		try {
-			in = ctx.getResourceAsStream(config);
+			config = "static/" + config;
+			String path = ClassUtils.getDefaultClassLoader().getResource(config).getPath();
+			in = new FileInputStream(path);
 			wb = new HSSFWorkbook(in);
 		} catch (Exception e) {
-			throw new ExcelException("File" + config + "not found," + e.getMessage());
+			throw new ExcelException("File " + config + " not found," + e.getMessage());
 		} finally {
 			try {
 				in.close();

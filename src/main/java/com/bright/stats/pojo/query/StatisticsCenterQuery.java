@@ -26,6 +26,8 @@ public class StatisticsCenterQuery extends PageQuery {
     private Boolean isBalanced;
     private String distNo;
     private String typeCode;
+    private String userDistNo;
+    private List<String> distNos;
 
     private List<Condition> conditions;
 }

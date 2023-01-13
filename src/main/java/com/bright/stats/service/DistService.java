@@ -1,8 +1,11 @@
 package com.bright.stats.service;
 
+import com.bright.common.result.PageResult;
+import com.bright.stats.pojo.query.DistExQuery;
 import com.bright.stats.pojo.vo.DistVO;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @Author txf

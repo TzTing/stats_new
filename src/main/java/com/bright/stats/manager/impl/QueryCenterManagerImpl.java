@@ -2,12 +2,14 @@ package com.bright.stats.manager.impl;
 
 import com.bright.common.pojo.query.Condition;
 import com.bright.common.result.PageResult;
+import com.bright.common.util.SecurityUtil;
 import com.bright.stats.constant.FileListConstant;
 import com.bright.stats.manager.FileListManager;
 import com.bright.stats.manager.QueryCenterManager;
 import com.bright.stats.pojo.po.primary.AnsTable;
 import com.bright.stats.pojo.po.primary.FileItem;
 import com.bright.stats.pojo.po.primary.FileList;
+import com.bright.stats.pojo.po.second.User;
 import com.bright.stats.pojo.query.QueryCenterQuery;
 import com.bright.stats.util.ListJsonUtil;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * @Author txf
@@ -80,8 +83,11 @@ public class QueryCenterManagerImpl implements QueryCenterManager {
 
         int totalCount = ansTables.size();  //公式总数
         // pageSize * pageNo - (pageSize - 1) + pageSize - 1;
-        int maxRows = rows * page - (rows - 1) + rows - 1; //最大行数
-        int i = rows * (page - 1) - (rows - 1) + rows - 1; //开始行数
+//        int maxRows = rows * page - (rows - 1) + rows - 1; //最大行数
+//        int i = rows * (page - 1) - (rows - 1) + rows - 1; //开始行数
+
+        int maxRows = rows * (page + 1) - (rows - 1) + rows - 1; //最大行数
+        int i = rows * (page) - (rows - 1) + rows - 1; //开始行数
 
         List<Map<Object, Object>> list = new ArrayList<>();
         List<Object> objs = new ArrayList<>();
@@ -117,6 +123,10 @@ public class QueryCenterManagerImpl implements QueryCenterManager {
                             sql = sql.replace("${paramSql}", paramSql);
                             if (StringUtils.isNotEmpty(sql)) {
                                 List<Map<String, Object>> listObject = jdbcTemplatePrimary.queryForList(sql, new Object[]{years, distNo});
+                                System.out.println("select : " + sql);
+                                System.out.println("years : " + years);
+                                System.out.println("months : " + months);
+                                System.out.println();
                                 if (isExcel) {
                                     map1.put(fItem.getFieldName().toLowerCase(), (listObject != null && listObject.size() > 0) ? listObject.get(0).values().toArray()[0] : "");
                                 } else {
@@ -144,6 +154,36 @@ public class QueryCenterManagerImpl implements QueryCenterManager {
         Pageable pageable = PageRequest.of(page, rows);
         Page pageData = new PageImpl(list, pageable, ansTables.size());
         return PageResult.of(pageData.getTotalElements(), pageData.getContent());
+    }
+
+    /**
+     * 查询分析表列表
+     *
+     * @param typeCode
+     * @param years
+     * @param months
+     * @return
+     */
+    @Override
+    public List<FileList> listAnalysisTables(String typeCode, Integer years, Integer months) {
+        User user = SecurityUtil.getLoginUser();
+        String userDistNo = user.getTjDistNo();
+
+        List<FileList> fileLists = fileListManager.listFileListsOnly(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_ANALYSIS, years, months);
+        List<FileList> collects = fileLists.stream().filter(fileList -> {
+            if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
+                    (fileList.getBelongDistNo().startsWith(userDistNo) || userDistNo.startsWith(fileList.getBelongDistNo()))) {
+                return true;
+            } else {
+                return false;
+            }
+        }).collect(Collectors.toList());
+
+        if(CollectionUtils.isEmpty(collects)){
+            throw new RuntimeException("未配置基础表！");
+        }
+
+        return collects;
     }
 
     private String jxExpress(String str, Integer years, String distNo, String paramSql) {

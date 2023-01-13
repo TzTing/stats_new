@@ -26,4 +26,16 @@ public interface ExcelTemplateRepository extends JpaRepository<ExcelTemplate, In
     @Query("from ExcelTemplate where years=:years and tableName=:typeCode and tableType=:tableType and (writer=:username or type='系统') and visible=true order by id")
     List<ExcelTemplate> findExcelTemplate(@Param("years") Integer years, @Param("typeCode") String typeCode, @Param("username") String username, @Param("tableType") String tableType);
 
+
+    /**
+     * 查询ExcelTemplate
+     * @param years 年份
+     * @param typeCode 模式/表名称
+     * @param username 用户名称
+     * @param tableType 基础表/分析表
+     * @return ExcelTemplate
+     */
+    @Query("from ExcelTemplate where years=:years and tableName=:typeCode and tableType=:tableType and (writer=:username or type='系统') and visible=true order by id")
+    List<ExcelTemplate> findExcelTemplate(@Param("years") Integer years, @Param("typeCode") String typeCode, @Param("username") String username, @Param("tableType") String tableType, @Param("tableType") String userDistNo);
+
 }

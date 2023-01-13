@@ -27,7 +27,7 @@ public class SortQueryUtil {
                     order = Sort.Order.desc(sort.substring(sort.indexOf(",")));
                     orders.add(order);
                 }else {
-                    order = Sort.Order.asc(sort.substring(sort.indexOf(",")));
+                    order = Sort.Order.asc(sort.substring(0, sort.indexOf(",")));
                     orders.add(order);
                 }
             }

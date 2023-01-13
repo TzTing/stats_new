@@ -25,5 +25,9 @@ public class TableHeader implements Serializable {
     private Integer width;
     private String fixed;
     private String align;
+    private Integer rowspan;
+    private Integer colspan;
+    private Integer level;
+    private String formatterSelect;
     private List<TableHeader> children;
 }

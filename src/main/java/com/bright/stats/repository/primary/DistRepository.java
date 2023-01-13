@@ -22,4 +22,17 @@ public interface DistRepository extends JpaRepository<Dist, Integer>, JpaSpecifi
      */
     @Query("select distId from Dist where years=:years group by distId")
     List<String> findDistNoByGroup(@Param("years") Integer years);
+
+    /**
+     * 获取地区所有级别
+     * @return
+     */
+    @Query(value = "select LEN(distId) from Dist where distId is not null group by LEN(distId) order by LEN(distId)", nativeQuery = true)
+    List<Integer> findDistNoAllGrade();
+
+
+    Dist findByYearsAndDistId(Integer years, String distId);
+
+    @Query(value = "select max(len(distid)) from dist where years=:years and distId like :distNo", nativeQuery = true)
+    int getCurrMaxDistNoLength(@Param("distNo") String distNo, @Param("years") Integer years);
 }

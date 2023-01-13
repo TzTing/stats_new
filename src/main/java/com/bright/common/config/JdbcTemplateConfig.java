@@ -24,4 +24,9 @@ public class JdbcTemplateConfig {
     public JdbcTemplate jdbcTemplateSecond(@Qualifier("secondDataSource") DataSource dataSource) {
         return new JdbcTemplate(dataSource);
     }
+
+    @Bean
+    public JdbcTemplate jdbcTemplateThird(@Qualifier("thirdDataSource") DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
 }

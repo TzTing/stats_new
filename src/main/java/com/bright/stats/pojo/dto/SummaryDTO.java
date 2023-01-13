@@ -19,4 +19,8 @@ public class SummaryDTO implements Serializable {
     private String distNo;
     private String tableName;
     private String typeCode;
+    private String userDistNo;
+
+    private Integer distType;
+
 }

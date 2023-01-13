@@ -119,4 +119,7 @@ public class FileItem implements Serializable {
 
 	@Column(name = "importFlag")
 	private Boolean importFlag;
+
+	@Column(name = "formatterSelect")
+	private String formatterSelect;
 }

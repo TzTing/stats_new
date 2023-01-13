@@ -100,7 +100,7 @@ public class BaseDataTagManagerImpl implements BaseDataTagManager {
             sqlbf = Common.replaceParamsbyStrBuf(sqlbf, condsMap);
             System.out.println("b14" + sqlbf);
             log.info("b14" + sqlbf);
-            List<Map<String, Object>> datas = jdbcTemplatePrimary.queryForList(sqlbf.toString(), new ArrayList<Object>());
+            List<Map<String, Object>> datas = jdbcTemplatePrimary.queryForList(sqlbf.toString());
             if (null != datas && datas.size() > 0) rvalues.addAll(datas);
         }
 

@@ -33,4 +33,11 @@ public class CasController {
     public Result login() {
         return Result.success();
     }
+
+    @GetMapping("/logout")
+    public Result logout() {
+        String url = casProperties.getCasServerLogoutUrl() + "?service="
+                + casProperties.getAppHomeUrl();
+        return Result.success(ResultEnum.SUCCESS, url);
+    }
 }

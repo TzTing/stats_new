@@ -1,10 +1,19 @@
 package com.bright;
 
+import com.alibaba.fastjson2.JSON;
+import com.bright.stats.pojo.po.primary.OperationLog;
+import com.bright.stats.repository.primary.OperationLogRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.FileNotFoundException;
+import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * @Author txf
@@ -13,6 +22,10 @@ import java.math.BigDecimal;
  */
 @SpringBootTest
 public class StatsApplicationTests {
+
+    @Autowired
+    private OperationLogRepository operationLogRepository;
+
 
     @Test
     void contextLoads() throws FileNotFoundException {
@@ -57,4 +70,18 @@ public class StatsApplicationTests {
         BigDecimal multiply = bigDecimal1.divide(bigDecimal2).multiply(bigDecimal3);
         System.out.println(multiply);
     }
+
+    @Test
+    void contextLoads2() {
+        operationLogRepository.deleteById(49842);
+    }
+    
+    @Test
+    void test2() throws UnsupportedEncodingException {
+
+        String s = new String("年综表".getBytes("gb2312"), "ISO8859-1");
+        System.out.println(s);
+    }
+
+
 }

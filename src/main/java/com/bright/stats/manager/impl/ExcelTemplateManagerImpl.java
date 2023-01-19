@@ -31,8 +31,11 @@ public class ExcelTemplateManagerImpl implements ExcelTemplateManager {
     public List<ExcelTemplate> listExcelTemplates(Integer years, String typeCode, String username, String tableType, String userDistNo) {
         List<ExcelTemplate> excelTemplates = excelTemplateRepository.findExcelTemplate(years, typeCode, username, tableType);
         List<ExcelTemplate> collects = excelTemplates.stream().filter(excelTemplate -> {
-            if (org.apache.commons.lang3.StringUtils.isBlank(excelTemplate.getBelongDistNo()) ||
-                    (excelTemplate.getBelongDistNo().startsWith(userDistNo))) {
+            if (org.apache.commons.lang3.StringUtils.isBlank(excelTemplate.getBelongDistNo())) {
+                return true;
+            } else if(userDistNo.length() >= excelTemplate.getBelongDistNo().length() && userDistNo.startsWith(excelTemplate.getBelongDistNo())) {
+                return true;
+            } else if(userDistNo.length() < excelTemplate.getBelongDistNo().length() && excelTemplate.getBelongDistNo().startsWith(userDistNo)) {
                 return true;
             } else {
                 return false;

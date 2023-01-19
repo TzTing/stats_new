@@ -1452,10 +1452,17 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
                                     //11
                                     if (Objects.nonNull(fileItem.getIsSumColumn()) && fileItem.getIsSumColumn()) {
-                                        headSql.append(fileItem.getFieldName().toUpperCase())
-                                                .append("=")
-                                                .append(cellValue)
-                                                .append(",");
+                                        if(StringUtils.equalsIgnoreCase(fileItem.getFType(), "C") || StringUtils.equalsIgnoreCase(fileItem.getFType(), "S")){
+                                            headSql.append(fileItem.getFieldName().toUpperCase())
+                                                    .append("='")
+                                                    .append(cellValue)
+                                                    .append("',");
+                                        } else {
+                                            headSql.append(fileItem.getFieldName().toUpperCase())
+                                                    .append("=")
+                                                    .append(cellValue)
+                                                    .append(",");
+                                        }
                                     } else {
                                         whereSql.append(fileItem.getFieldName())
                                                 .append("='").append(cellValue).append("' and ");

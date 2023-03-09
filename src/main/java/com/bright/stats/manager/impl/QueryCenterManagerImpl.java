@@ -123,10 +123,6 @@ public class QueryCenterManagerImpl implements QueryCenterManager {
                             sql = sql.replace("${paramSql}", paramSql);
                             if (StringUtils.isNotEmpty(sql)) {
                                 List<Map<String, Object>> listObject = jdbcTemplatePrimary.queryForList(sql, new Object[]{years, distNo});
-                                System.out.println("select : " + sql);
-                                System.out.println("years : " + years);
-                                System.out.println("months : " + months);
-                                System.out.println();
                                 if (isExcel) {
                                     map1.put(fItem.getFieldName().toLowerCase(), (listObject != null && listObject.size() > 0) ? listObject.get(0).values().toArray()[0] : "");
                                 } else {

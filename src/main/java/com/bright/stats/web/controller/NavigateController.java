@@ -9,9 +9,12 @@ import com.bright.stats.pojo.dto.MqMessagesDTO;
 import com.bright.stats.pojo.dto.ReportDTO;
 import com.bright.stats.pojo.po.primary.Dist;
 import com.bright.stats.pojo.po.primary.MqMessage;
+import com.bright.stats.pojo.po.primary.Note;
 import com.bright.stats.pojo.po.primary.TableType;
 import com.bright.stats.pojo.po.second.User;
 import com.bright.stats.pojo.query.MqMessagesQuery;
+import com.bright.stats.pojo.vo.InteractiveVO;
+import com.bright.stats.pojo.vo.InteractiveVOEx;
 import com.bright.stats.pojo.vo.OnlineUserVo;
 import com.bright.stats.service.NavigateService;
 import io.swagger.annotations.Api;
@@ -182,6 +185,17 @@ public class NavigateController {
 
         Boolean result = navigateService.createEmptyTable(createEmptyTableDTO);
         return Result.success(result);
+    }
+
+
+    @ApiOperation(value = "获取消息内容列表")
+    @GetMapping("/note/list")
+    public Result listNotes(String keyword){
+
+        User loginUser = SecurityUtil.getLoginUser();
+        TableType tableType = loginUser.getTableType();
+        List<InteractiveVOEx> notes = navigateService.listNotes(keyword, tableType.getTableType());
+        return Result.success(notes);
     }
 
     

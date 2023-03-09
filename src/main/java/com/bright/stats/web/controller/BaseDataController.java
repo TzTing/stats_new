@@ -310,19 +310,19 @@ public class BaseDataController {
         exportExcelDTO.setUserDistNo(SecurityUtil.getLoginUser().getTjDistNo());
         ExportExcelVO exportExcelVO = baseDataService.exportExcelByTemplate(exportExcelDTO);
 
-        if(!CollectionUtils.isEmpty(exportExcelVO.getData())){
-            Map<String, Object> data = exportExcelVO.getData();
-            for (String temp : data.keySet()) {
-                List<Map<String,Object>> mapList = (List<Map<String, Object>>) data.get(temp);
-                for(Map<String, Object> tempMap : mapList){
-                    for (String keyTemp : tempMap.keySet()){
-                        if(Objects.isNull(tempMap.get(keyTemp))){
-                            tempMap.put(keyTemp, "");
-                        }
-                    }
-                }
-            }
-        }
+//        if(!CollectionUtils.isEmpty(exportExcelVO.getData())){
+//            Map<String, Object> data = exportExcelVO.getData();
+//            for (String temp : data.keySet()) {
+//                List<Map<String,Object>> mapList = (List<Map<String, Object>>) data.get(temp);
+//                for(Map<String, Object> tempMap : mapList){
+//                    for (String keyTemp : tempMap.keySet()){
+//                        if(Objects.isNull(tempMap.get(keyTemp))){
+//                            tempMap.put(keyTemp, "");
+//                        }
+//                    }
+//                }
+//            }
+//        }
 
 
         JSONObject jsonObject = JSONObject.fromObject(exportExcelVO);

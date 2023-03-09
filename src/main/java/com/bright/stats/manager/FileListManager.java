@@ -55,4 +55,14 @@ public interface FileListManager {
      */
     List<FileList> listFileListsOnly(String typeCode, String tableType, Integer years, Integer months);
 
+
+    /**
+     * 获取多个FileList(不区分表类型TableType, 并且查所有)
+     * @param typeCode 模式
+     * @param years 年份
+     * @param months 月份
+     * @return 多个FileList
+     */
+    List<FileList> listFileLists(String typeCode, Integer years, Integer months);
+
 }

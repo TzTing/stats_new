@@ -37,4 +37,15 @@ public interface FileListRepository extends JpaRepository<FileList, Integer>, Jp
      */
     @Query("from FileList where typeCode=:typeCode and tableType=:tableType and years=:years and useFlag='是' order by orderId")
     List<FileList> findFileList(@Param("typeCode") String typeCode, @Param("tableType") String tableType, @Param("years") Integer years);
+
+
+    /**
+     * 查询FileLists(不区分tableType,并且查所有)
+     *
+     * @param typeCode
+     * @param years
+     * @return
+     */
+    @Query("from FileList where typeCode=:typeCode and years=:years order by orderId")
+    List<FileList> findFileList(@Param("typeCode") String typeCode, @Param("years") Integer years);
 }

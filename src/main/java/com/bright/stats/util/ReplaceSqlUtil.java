@@ -21,7 +21,9 @@ public class ReplaceSqlUtil {
 		sql = StringUtils.replace(sql, "${__userName}", String.valueOf(user.getUsername()));
 		sql = StringUtils.replace(sql, "${__tableTypeId}", String.valueOf(tableType == null ? null : tableType.getId()));
 		sql = StringUtils.replace(sql, "${__szdb}", DataConstants.SZDB);
-		
+
+		sql = StringUtils.replace(sql, "${__years}", tableType.getCurNewYear().toString());
+
 		//小写
 		sql = StringUtils.replace(sql, "${__userid}", String.valueOf(user.getId()));
 		sql = StringUtils.replace(sql, "${__username}", String.valueOf(user.getUsername()));

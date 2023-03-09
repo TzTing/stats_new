@@ -3,8 +3,11 @@ package com.bright.stats.service;
 import com.bright.stats.pojo.dto.CreateEmptyTableDTO;
 import com.bright.stats.pojo.dto.MqMessagesDTO;
 import com.bright.stats.pojo.po.primary.MqMessage;
+import com.bright.stats.pojo.po.primary.Note;
 import com.bright.stats.pojo.po.primary.TableType;
 import com.bright.stats.pojo.query.MqMessagesQuery;
+import com.bright.stats.pojo.vo.InteractiveVO;
+import com.bright.stats.pojo.vo.InteractiveVOEx;
 
 import java.util.List;
 
@@ -61,4 +64,7 @@ public interface NavigateService {
      * @return
      */
     Boolean createEmptyTable(CreateEmptyTableDTO createEmptyTableDTO);
+
+
+    List<InteractiveVOEx> listNotes(String keyword, String tableType);
 }

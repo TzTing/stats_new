@@ -40,6 +40,7 @@ import org.springframework.web.client.RestTemplate;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -347,142 +348,93 @@ public class BaseDataServiceImpl implements BaseDataService {
             return false;
         }).collect(Collectors.toList());
 
-        //筛选出未上报的单位
-
 
         StringBuilder updateUploadBaseSql = new StringBuilder();
+
 
         if(isReport){
             //如果是上报
 
-            //如果该地区或该地区下没有上报的单位 则需要进行上报
-            if(CollectionUtils.isEmpty(reportUploadBasesList)){
+            //上报本级
+            updateUploadBaseSql.setLength(0);
+            updateUploadBaseSql.append("update uploadBase set sbflag=1,okflag=1,outbz=1,bdate=NOW(),writer= '" + username +
+                    "' WHERE uploadBase.years=" + years + " AND uploadBase.months=" + months +
+                    " AND uploadBase.distno='" + distNo + "' and uploadBase.runflag=1 " +
+                    " and uploadBase.okflag=0 and uploadBase.tableType='" + tableType + "'");
+            jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
 
-
-                //上报本级
-                updateUploadBaseSql.setLength(0);
-                updateUploadBaseSql.append("update uploadBase set sbflag=1,okflag=1,outbz=1,bdate=NOW(),writer= '" + username +
-                        "' WHERE uploadBase.years=" + years + " AND uploadBase.months=" + months +
-                        " AND uploadBase.distno='" + distNo + "' and uploadBase.runflag=1 " +
-                        " and uploadBase.okflag=0 and uploadBase.tableType='" + tableType + "'");
-                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
-
-
-                //
-                updateUploadBaseSql.setLength(0);
-                updateUploadBaseSql.append("update uploadBase p1 LEFT JOIN uploadBase p2 ON p1.years=p2.years " +
-                        " and p1.months=p2.months and p2.runflag=1 and p2.okflag=1 and p1.distno=p2.distno and p1.tableType=p2.tableType " +
-                        " set p1.okflag=1,p1.outbz=1,p1.bdate=NOW(),p1.writer= '" + username +
-                        "' WHERE p1.years=" + years + " AND p1.months=" + months + " and p1.distno like concat(" + distNo + ",'%') " + "  AND p1.distno<>'" + distNo +
-                        "' and p1.runflag=1 and p1.okflag=0 and p1.tableType='" + tableType + "' AND p2.id is null");
-                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
-
-            } else {
-                updateUploadBaseSql.setLength(0);
-                updateUploadBaseSql.append("UPDATE uploadBase u1 left JOIN uploadbase u2 on u1.years=u2.years " +
-                        " and u1.months=u2.months and u2.runflag=1 and u2.okflag=1 and u1.distno=u2.distno and u1.tableType=u2.tableType " +
-                        " set u1.okflag=1,u1.outbz=1,u1.bdate=NOW(),u1.writer='" + username +
-                        "' where u1.years=" + years + " AND u1.months=" + months + " AND u1.distno like concat(" + distNo + ",'%') " +
-                        " and u1.runflag=1 and u1.okflag=0 and u1.tableType='" + tableType + "' and u2.id is null");
-                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
-
-                final String distNoFinal = distNo;
-                //如果当前级别的所有下级都已经上报了 则上报本级
-                Long nextLevelReportCount = reportUploadBasesList.stream().filter(e -> {
-                    if(!e.getDistNo().equalsIgnoreCase(distNoFinal)){
-                        return true;
-                    }
-                    return false;
-                }).count();
-
-                Long nextLevelNeedReportCount = allUploadBasesList.stream().filter(e -> {
-                    if(!e.getDistNo().equalsIgnoreCase(distNoFinal)){
-                        return true;
-                    }
-                    return false;
-                }).count();
-
-                if(nextLevelNeedReportCount.equals(nextLevelReportCount)){
-                    updateUploadBaseSql.setLength(0);
-                    updateUploadBaseSql.append("update uploadBase set sbflag=1,okflag=1,outbz=1,bdate=NOW(),writer='" + username +
-                            "' WHERE uploadBase.years=" + years + " AND uploadBase.months=" + months + " " +
-                            " AND uploadBase.distno='" + distNo + "' and uploadBase.tableType='" + tableType + "'");
-                    jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
-                }
-
-            }
 
         } else {
-            //如果是退回
-
-            if(!CollectionUtils.isEmpty(reportUploadBasesList)){
-                isReportBefore = true;
-
-                updateUploadBaseSql.setLength(0);
-                //用户不能退回自己本身的地区 （天河区用户不能退回天河区）
-                updateUploadBaseSql.append("update uploadBase set sbflag=0,okflag=0,outbz=0,bdate=null,edate=NOW(),writer= '" + username +
-                        "' WHERE years=" + years + " AND months=" + months +
-                        " AND distno='" + distNo + "' and runflag=1 and okflag=1 " +
-                        " and distno<>'" + userDistNo + "' and tableType='" + tableType + "'");
+                //如果是退回
+            updateUploadBaseSql.setLength(0);
+            updateUploadBaseSql.append("update uploadBase set sbflag=0,okflag=0,outbz=0,bdate=null,edate=NOW(),writer= '" + username + "' " +
+                    "WHERE years=" + years + " AND months=" + months +
+                    " AND distno='" + distNo + "' and runflag=1 and okflag=1  and distno<>'" + userDistNo + "' and tableType='" + tableType + "'");
                 jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
-
-
-
-                updateUploadBaseSql.setLength(0);
-                updateUploadBaseSql.append("update uploadBase b1 LEFT JOIN uploadBase b2 " +
-                        " on b1.years=b2.years and b1.months=b2.months and b2.runflag=1 " +
-                        " and b2.okflag=0 and b1.distno=b2.distno and b1.tableType=b2.tableType " +
-                        " SET b1.okflag=0,b1.outbz=0,b1.bdate=null,b1.edate=NOW(),b1.writer='" + username +
-                        "' WHERE b1.years=" + years + " AND b1.months=" + months + " AND b1.distno<>'" + distNo + "' " +
-                        " and  b1.distno like concat(" + distNo + ",'%') " +
-                        " and b1.runflag=1 and b1.okflag=1 and b1.tableType='" + tableType +
-                        "' and b2.id is null");
-                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
-
-            } else {
-                updateUploadBaseSql.setLength(0);
-                updateUploadBaseSql.append(" UPDATE uploadBase s1 LEFT JOIN uploadBase s2 ON s1.years=s2.years " +
-                        " and s1.months=s2.months and s2.runflag=1 and s2.okflag=0 and s1.distno=s2.distno and s1.tableType=s2.tableType" +
-                        " SET s1.okflag=0,s1.outbz=0,s1.bdate=null,s1.edate=NOW(),s1.writer= '" + username +
-                        "' WHERE s1.years=" + years + " AND s1.months=" + months + " and  s1.distno ='" + distNo + "' and s1.runflag=1 " +
-                        " and s1.okflag=1 and s1.tableType='" + tableType + "' and s1.distno<>'" + userDistNo + "'");
-                jdbcTemplatePrimary.execute(updateUploadBaseSql.toString());
-
-            }
 
         }
 
 
         //处理完成后
-        List<FileList> fileLists = fileListManager.listFileLists(tableType, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, userDistNo);
+//        List<FileList> fileLists = fileListManager.listFileLists(tableType, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, userDistNo);
+//
+//
+//        //关联更新所有单位下的表数据状态
+//        for (FileList fileList : fileLists) {
+//
+//            StringBuilder updateSql = new StringBuilder();
+//
+//            if(isReport){
+//                updateSql.setLength(0);
+//                //如果是上报
+//                updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=1, statusno=3, saveflag='是',upReportTime=NOW() where years = ")
+//                        .append(years).append(" and distid like '").append(distNo).append("%'").append(" and ifnull(okflag, 0) = 0");
+//
+//            } else {
+//                //如果是退回
+//                updateSql.setLength(0);
+//
+//                if(isReportBefore){
+//                    //如果是上报
+//                    updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=0, statusno=2, saveflag='否',upReportTime=null where years = ")
+//                            .append(years).append(" and distid like '").append(distNo).append("%'").append(" and okflag=1 and distid<>'").append(userDistNo).append("'");
+//                } else {
+//
+//                    //如果是上报
+//                    updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=0, statusno=2, saveflag='否',upReportTime=null where years = ")
+//                            .append(years).append(" and distid = '").append(distNo).append("%'").append(" and okflag=1 and distid<>'").append(userDistNo).append("'");
+//
+//                }
+//            }
+//            jdbcTemplatePrimary.execute(updateSql.toString());
+//        }
+
+
+        String fileNamesSql = "SELECT uploadBase.years as years, uploadBase.months as months, fileList.tableName as tablename, " +
+                "fileList.tableDis as tableDis, " +
+                "tableType.optType as optType, isDeleteTab as isDeleteTab" +
+                "         from uploadBase inner join fileList" +
+                "          on uploadBase.tableType=fileList.typeCode and filelist.tableType='基本表'   and uploadBase.years=fileList.years  inner join tableType " +
+                "           on uploadBase.tableType=tableType.tableType    " +
+                "        where uploadBase.id=" + uploadBaseId;
+
+        List<Map<String, Object>> fileLists = jdbcTemplatePrimary.queryForList(fileNamesSql);
 
         //关联更新所有单位下的表数据状态
-        for (FileList fileList : fileLists) {
+        for (Map<String, Object> fileList : fileLists) {
 
             StringBuilder updateSql = new StringBuilder();
 
-            if(isReport){
+            if (isReport) {
                 updateSql.setLength(0);
-                //如果是上报
-                updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=1, statusno=3, saveflag='是',upReportTime=NOW() where years = ")
-                        .append(years).append(" and distid like '").append(distNo).append("%'").append(" and ifnull(okflag, 0) = 0");
-
+                updateSql.append("UPDATE " + fileList.get("tablename") + " set okflag=1, statusno=3, saveflag='是',upReportTime=NOW() where years = ")
+                        .append(years).append(" and distid = '").append(distNo).append("'").append(" and ifnull(okflag, 0) = 0");
             } else {
-                //如果是退回
                 updateSql.setLength(0);
-
-                if(isReportBefore){
-                    //如果是上报
-                    updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=0, statusno=2, saveflag='否',upReportTime=null where years = ")
-                            .append(years).append(" and distid like '").append(distNo).append("%'").append(" and okflag=1 and distid<>'").append(userDistNo).append("'");
-                } else {
-
-                    //如果是上报
-                    updateSql.append("UPDATE " + fileList.getTableName() + " set okflag=0, statusno=2, saveflag='否',upReportTime=null where years = ")
-                            .append(years).append(" and distid = '").append(distNo).append("%'").append(" and okflag=1 and distid<>'").append(userDistNo).append("'");
-
-                }
+                updateSql.append("UPDATE " + fileList.get("tablename") + " set okflag=0, statusno=2, saveflag='否',upReportTime=null where years = ")
+                        .append(years).append(" and distid = '").append(distNo).append("'").append(" and okflag=1 and distid<>'").append(userDistNo).append("'");
             }
+
             jdbcTemplatePrimary.execute(updateSql.toString());
         }
     }
@@ -565,13 +517,89 @@ public class BaseDataServiceImpl implements BaseDataService {
 
         if (!"多表一个Excel".equals(excelTemplate.getExcelType())) {
             List<Map<String, Object>> list = baseDataManager.listTableData(baseDataQuery, false, List.class);
+            FileList fileList = fileListManager.getFileList(typeCode
+                    , FileListConstant.FILE_LIST_TABLE_TYPE_BASE
+                    , baseDataQuery.getTableName()
+                    , years
+                    , months
+                    , userDistNo);
+
+            List<FileItem> fileItems = fileList.getFileItems();
+
+            for (int i = 0; i < list.size(); i++) {
+                Map<String, Object> tempRes = list.get(i);
+
+                for (int i1 = 0; i1 < fileItems.size(); i1++) {
+                    FileItem fileItem = fileItems.get(i1);
+
+                    //不是数值类型 或者不存在key 跳过
+                    if(!"N".equalsIgnoreCase(fileItem.getFType())
+                            || !tempRes.containsKey(fileItem.getFieldName())
+                            || !"1".equalsIgnoreCase(fileItem.getDisFlag())){
+                        continue;
+                    }
+
+                    //获得数值的格式化
+                    String disFormat = StringUtils.isEmpty(fileItem.getDisFormat()) ? "" : fileItem.getDisFormat().split(",")[0];
+
+                    //根据格式化做对应的处理
+                    //获取小数位数
+                    Integer unitSize = disFormat.split("\\.").length < 2 ? 0 : disFormat.split("\\.")[1].length();
+
+                    BigDecimal value = (BigDecimal)tempRes.get(fileItem.getFieldName());
+                    //值为空重新赋值
+                    if(Objects.isNull(value)){
+                        tempRes.put(fileItem.getFieldName(), new BigDecimal(0).setScale(unitSize));
+                    } else {
+                        //不为空处理数值位数
+                        tempRes.put(fileItem.getFieldName(), value.setScale(unitSize, BigDecimal.ROUND_DOWN));
+                    }
+                }
+            }
+
+           
+
             data.put(tableName.toLowerCase(), list);
         } else {
             List<FileList> fileLists = fileListManager.listFileLists(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, userDistNo);
             for (FileList fileList : fileLists) {
                 baseDataQuery.setTableName(fileList.getTableName());
                 List<Map<String, Object>> list = baseDataManager.listTableData(baseDataQuery, false, List.class);
+
+                List<FileItem> fileItems = fileList.getFileItems();
+
+
                 if (excelTemplate.getTemplateShape() == 2) {
+
+                    for (int i = 0; i < list.size(); i++) {
+                        Map<String, Object> tempRes = list.get(i);
+
+                        for (int i1 = 0; i1 < fileItems.size(); i1++) {
+                            FileItem fileItem = fileItems.get(i1);
+
+                            //不是数值类型 或者不存在key 跳过
+                            if(!"N".equalsIgnoreCase(fileItem.getFType()) || !tempRes.containsKey(fileItem.getFieldName())){
+                                continue;
+                            }
+
+                            //获得数值的格式化
+                            String disFormat = StringUtils.isEmpty(fileItem.getDisFormat()) ? "" : fileItem.getDisFormat().split(",")[0];
+
+                            //根据格式化做对应的处理
+                            //获取小数位数
+                            Integer unitSize = disFormat.split("\\.").length < 2 ? 0 : disFormat.split("\\.")[1].length();
+
+                            BigDecimal value = (BigDecimal)tempRes.get(fileItem.getFieldName());
+                            //值为空重新赋值
+                            if(Objects.isNull(value)){
+                                tempRes.put(fileItem.getFieldName(), new BigDecimal(0).setScale(unitSize));
+                            } else {
+                                //不为空处理数值位数
+                                tempRes.put(fileItem.getFieldName(), value.setScale(unitSize, BigDecimal.ROUND_DOWN));
+                            }
+                        }
+                    }
+
                     data.put(fileList.getTableName().toLowerCase(), list);
 
                 } else {

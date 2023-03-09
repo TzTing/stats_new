@@ -48,7 +48,9 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.Date;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @Author txf
@@ -711,6 +713,10 @@ public class BaseDataManagerImpl implements BaseDataManager {
             List<RuleOuter> outers = fileList.getRuleOuters();
 
             rvalue.addAll(this.checksStype1(fileList, tableType, ids, outers, years, months, distNo, grade, isAllDist, isSb));
+            rvalue.addAll(this.checksStype2(fileList, tableType, ids, outers, years, months, distNo, grade, isAllDist, isSb));
+
+            //校验stype为类型为2的情况
+//            rvalue.addAll(this.checksStype2(fileList, tableType, ids, outers, years, months, distNo, grade, isAllDist, isSb));
 
             //稽核表间公式
             defCond.setLength(0);
@@ -820,6 +826,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
             final List<Object> paramLists = new ArrayList<>();
             paramLists.addAll(rids);
+            //将指标不符合的数据更新成未稽核状态
             int[] num = jdbcTemplatePrimary.batchUpdate(Common.replaceFun(upsqlbyid.toString()), new BatchPreparedStatementSetter() {
                 @Override
                 public void setValues(PreparedStatement ps, int i) throws SQLException {
@@ -839,6 +846,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
             }
 
 //            boolean flag = tongjiJdbcTemplate.updateDate(Common.replaceFun(upsql.toString()), rids);
+            //将指标符合的数据更新成稽核状态
             int update = jdbcTemplatePrimary.update(Common.replaceFun(upsql.toString()), rids.toArray(listid.toArray(new Object[rids.size()])));
 
         } catch (NumberFormatException e) {
@@ -1114,6 +1122,15 @@ public class BaseDataManagerImpl implements BaseDataManager {
                 List<String> inserList = new ArrayList<>();
 
 
+                //新增
+                Map<String, String> insertItemValue = new LinkedHashMap<>();
+
+                //更新
+                Map<String, String> updateItemValue = new LinkedHashMap<>();
+
+
+                List<RuleInner> ruleInners = fileList.getRuleInners();
+
                 int keySize = keyColumns.size();
                 int cellSize = sheet.getRow(rowIndex).getLastCellNum();
                 //模板列与文件列
@@ -1152,6 +1169,10 @@ public class BaseDataManagerImpl implements BaseDataManager {
                     whereSql.setLength(0);
                     headColumns.setLength(0);
                     values.setLength(0);
+
+                    insertItemValue.clear();
+                    updateItemValue.clear();
+
                     if (sheet.getRow(rowIndex) == null) {
                         isover = true;
                         break;
@@ -1446,8 +1467,14 @@ public class BaseDataManagerImpl implements BaseDataManager {
                                         }
                                         values.append(StringUtils.trimToEmpty(cellValue)).append(",");
 
+                                        //将导入的item的value对应添加
+                                        insertItemValue.put(fileItem.getFieldName().toUpperCase(), cellValue);
+
                                     } else {
                                         values.append("'").append(StringUtils.trimToEmpty(cellValue)).append("',");
+
+                                        //将导入的item的value对应添加
+                                        insertItemValue.put(fileItem.getFieldName().toUpperCase(), "'" + cellValue + "'");
                                     }
 
                                     //11
@@ -1457,11 +1484,17 @@ public class BaseDataManagerImpl implements BaseDataManager {
                                                     .append("='")
                                                     .append(cellValue)
                                                     .append("',");
+
+                                            //将导入的item的value对应添加
+                                            updateItemValue.put(fileItem.getFieldName().toUpperCase(), cellValue);
                                         } else {
                                             headSql.append(fileItem.getFieldName().toUpperCase())
                                                     .append("=")
                                                     .append(cellValue)
                                                     .append(",");
+
+                                            //将导入的item的value对应添加
+                                            updateItemValue.put(fileItem.getFieldName().toUpperCase(), cellValue);
                                         }
                                     } else {
                                         whereSql.append(fileItem.getFieldName())
@@ -1471,6 +1504,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
                                     if (temp_distid.length() > 0) {
                                         headColumns.append("distid").append(",");
                                         values.append("'").append(temp_distid).append("',");
+                                        insertItemValue.put("distid", "'" + temp_distid + "'");
                                         whereSql.append(" distid='").append(temp_distid).append("' and ");
                                         temp_distid.setLength(0);
                                     }
@@ -1480,6 +1514,57 @@ public class BaseDataManagerImpl implements BaseDataManager {
                             }
                         }
                     }
+
+                    //处理完导入的字段后，处理表内关系
+                    for (RuleInner ruleInner : ruleInners) {
+                        //如果表间稽核开启
+                        if(ruleInner.getUseFlag()){
+                            String fieldName = ruleInner.getFieldName();
+                            String insertExpress = ruleInner.getExpress().toUpperCase();
+                            String updateExpress = ruleInner.getExpress().toUpperCase();
+
+                            //处理插入的语句的指标值
+                            for (String s : insertItemValue.keySet()) {
+                                insertExpress = insertExpress.replace("[" + s + "]", insertItemValue.get(s));
+                            }
+                            insertItemValue.put(fieldName.toUpperCase(), String.valueOf(CalculationUtils.calculation(insertExpress)));
+
+
+                            //处理更新语句的指标值的语句的指标值
+                            for (String s : updateItemValue.keySet()) {
+                                updateExpress = updateExpress.replace("[" + s + "]", updateItemValue.get(s));
+                            }
+                            updateItemValue.put(fieldName.toUpperCase(), String.valueOf(CalculationUtils.calculation(updateExpress)));
+
+                        }
+                    }
+
+
+                    //将更新的语句改成处理指标后的更新语句
+                    if(!StringUtils.isBlank(headSql)){
+                        String updateItemValueSql
+                                = updateItemValue.keySet().stream().map(e -> e + "=" + updateItemValue.get(e)).collect(Collectors.joining(", "));
+
+                        headSql.setLength(0);
+                        headSql.append(updateItemValueSql).append(", ");
+                    }
+
+                    //将新增的语句改成处理指标后的新增语句
+                    if(!StringUtils.isBlank(headColumns)){
+
+                        String items
+                                = insertItemValue.keySet().stream().collect(Collectors.joining(", "));
+                        headColumns.setLength(0);
+                        headColumns.append(items).append(", ");
+
+                        String values2
+                                = insertItemValue.values().stream().collect(Collectors.joining(", "));
+                        values.setLength(0);
+                        values.append(values2).append(", ");
+
+                    }
+
+
                     //		String sql=StringUtils.substring(headColumns.toString(),0,headColumns.lastIndexOf(","));
                     //headColumns.append(")");
                     //	String sql=StringUtils.substring(headColumns.toString(),0,headColumns.lastIndexOf(","))+")";
@@ -2053,7 +2138,9 @@ public class BaseDataManagerImpl implements BaseDataManager {
             RuleOuter outer = outers.get(i);
 
 
-            if (outer.getSType() == 0) continue;
+            if (outer.getSType() != 1) {
+                continue;
+            }
             sqlbf2.setLength(0);
             sqlbf3.setLength(0);
             sqlbf2.append(sql2);
@@ -2118,6 +2205,241 @@ public class BaseDataManagerImpl implements BaseDataManager {
             }
 
         }
+        return rvalue;
+
+    }
+
+
+    private List<CheckVO> checksStype2(FileList fileList, TableType tableType, Object[] ids, List<RuleOuter> outers, Integer years
+            , Integer months, String distNo, Integer grade, Boolean isAllDist, Boolean isSb) {
+
+        List<CheckVO> rvalue = new ArrayList<>();
+
+        Map<Object, Object> params = new HashMap<>();
+        params.put("years", years);
+        params.put("months", months);
+        params.put("distid", distNo);
+        params.putAll(bsConfigManager.querySysParam());
+        int currentLen = distNo.length();
+        int nextLen = DataConstants.getMaxDistNoLength(distNo, 2);
+        params.put("currentlen", currentLen);
+        params.put("nextlen", nextLen);
+        String monthsColumn = tableType.getOptType() == 1 ? " 0 as months" : "months";
+
+        StringBuffer distId = new StringBuffer();
+        StringBuffer distName = new StringBuffer();
+        StringBuffer lx = new StringBuffer();
+        StringBuffer lxName = new StringBuffer();
+
+        List<Map<String, Object>> data = null;
+
+        Object[] tmIds = ids;
+
+        StringBuffer sqlbf2 = new StringBuffer();
+        StringBuffer sqlbf3 = new StringBuffer();
+        String sql2 = "select id from " + fileList.getTableName() + " where years=? ";
+        sql2 += (isAllDist) ? "and distid like case when '" + distNo + "'='0' then '%' else '" + distNo + "%' end " : " and distid='" + distNo + "'";
+        String sql3 = "select distid,distname,lx,lxname,years," + monthsColumn + " from " + fileList.getTableName() + " where id=? ";
+
+
+        for (int i1 = 0; i1 < outers.size(); i1++) {
+            RuleOuter outer = outers.get(i1);
+
+            if(outer.getSType() != 2){
+                continue;
+            }
+
+            sqlbf2.setLength(0);
+            sqlbf3.setLength(0);
+            sqlbf2.append(sql2);
+            sqlbf3.append(sql3);
+
+
+            String decExpress = outer.getDecExpress();
+            String decCond = outer.getExCond();
+            String sourceExpress = outer.getSourceExpress();
+            String sourceCond = outer.getSourceCondExpress();
+            String opt = outer.getOpt();
+
+
+            //解析decExpress,得到要比较的表和字段
+            String temDecExpress = decExpress.substring(decExpress.indexOf("[") + 1, decExpress.indexOf("]"));
+            String decExpressTableName = temDecExpress.substring(0, temDecExpress.indexOf("|"));
+            String decField = temDecExpress.substring(temDecExpress.indexOf("|") + 1);
+            String decCondTemp = StringUtils.isEmpty(decCond) ? null : decCond.substring(decCond.indexOf("[") + 1, decCond.indexOf("]"));
+
+
+
+            //解析sourceExpress,得到要比较的表和字段
+            String temSourceExpress = sourceExpress.substring(sourceExpress.indexOf("[") + 1, sourceExpress.indexOf("]"));
+            String sourceExpressTableName = temSourceExpress.substring(0, temSourceExpress.indexOf("|"));
+            String sourceField = temSourceExpress.substring(temSourceExpress.indexOf("|") + 1);
+            String sourceCondTemp = StringUtils.isEmpty(sourceCond) ? null : sourceCond.substring(sourceCond.indexOf("[") + 1, sourceCond.lastIndexOf("]"));
+
+            String[] sourceFields = sourceField.split(",");
+
+            //解析opt
+            String[] optList = opt.split(",");
+            if(optList.length < 2){
+                throw new RuntimeException("配置不匹配!");
+            }
+
+            String decOpt = optList[0];
+            String sourceOpt = optList[1];
+
+            //如果需要处理数据的id列表为空
+            if (null == tmIds || tmIds.length == 0) {
+
+                //如果指定了额外查询条件
+                //是否指定了类型 则加上类型查询条件
+                if(decCondTemp != null){
+                    String decExtraName = decCondTemp.split("\\|")[0];
+                    String decExtraValue = decCondTemp.split("\\|")[1];
+                    sqlbf2.append(" and " + decExtraName + " = '" + decExtraValue + "' ") ;
+                }
+
+                //查询数据的id
+                data = jdbcTemplatePrimary.queryForList(Common.replaceFun(sqlbf2.toString()), new Object[]{years});
+                tmIds = data.stream().map(stringObjectMap -> stringObjectMap.get("id")).collect(Collectors.toList()).toArray(new Object[data.size()]);
+            }
+
+            //循环查询出需要稽核的当前表的所有数据
+            for (int i = 0; i < tmIds.length; i++) {
+
+                //根据id查询出相关的数据信息
+                Integer id = (tmIds[i] != null) ? Integer.parseInt(tmIds[i].toString()) : -1;
+                List<Map<String, Object>> list = jdbcTemplatePrimary.queryForList(Common.replaceFun(sqlbf3.toString()), new Object[]{id});
+
+                //没查询数据跳过
+                if (list.size() <= 0) {
+                    continue;
+                }
+
+                distId.setLength(0);
+                distName.setLength(0);
+                lx.setLength(0);
+                lxName.setLength(0);
+
+                if (list.size() > 0) {
+                    distId.append((String) list.get(0).get("distid"));
+                    distName.append((String) list.get(0).get("distname"));
+                    lx.append((String) list.get(0).get("lx"));
+                    lxName.append((String) list.get(0).get("lxname"));
+                    years = (Integer) list.get(0).get("years");
+                    months = (Integer) list.get(0).get("months");
+                    params.put("distid", distId);
+                    params.put("lx", lx);
+                    params.put("lxname", lxName);
+                    params.put("currentlen", distId.length());
+                    params.put("nextlen", DataConstants.getMaxDistNoLength(distId.toString(), 2));
+                }
+
+
+                //查询是否符合条件和结果值
+                //1 符合表达式的条件
+                //0 不符合
+                String dec = " select case when sum(" + decField + ") " + decOpt + " then 1 else 0 end as sumvalue" +
+                        ", sum(" + decField + ") as decvalue from " + decExpressTableName
+                        + " where 1=1 and id =" + id;
+
+                List<Map<String, Object>> decList = jdbcTemplatePrimary.queryForList(dec);
+
+
+                //如果符合表达式一，则需要判断表达式二
+                if(decList.get(0).get("sumvalue").equals(1)){
+                    //表达式一的值
+                    BigDecimal value1 = (BigDecimal) decList.get(0).get("decvalue");
+
+                    StringBuilder sourceIdSql = new StringBuilder();
+                    StringBuilder sourceDataSql = new StringBuilder();
+
+                    sourceIdSql.append("select id from " + sourceExpressTableName + " where years=? ");
+                    sourceIdSql.append((isAllDist) ? "and distid like case when '" + distNo + "'='0' then '%' else '" + distNo + "%' end " : " and distid='" + distNo + "'");
+                    sourceDataSql.append("select distid,distname,lx,lxname,years," + monthsColumn + " from " + sourceExpressTableName + " where id=? ");
+                    List<Map<String, Object>> sourceDataList = null;
+                    Object[] sourceIds = null;
+
+                    //如果指定了额外查询条件
+                    //是否指定了类型 则加上类型查询条件
+                    if(sourceCondTemp != null){
+                        //可能指定了多个
+                        String[] sourceCondList = sourceCondTemp.split("\\]\\[");
+
+                        //如果是多个 拼接多个条件
+                        if(sourceCondList.length > 1){
+                            sourceIdSql.append( " and ( ");
+                            for (int i2 = 0; i2 < sourceCondList.length; i2++) {
+                                String decExtraName = sourceCondList[i2].split("\\|")[0];
+                                String decExtraValue = sourceCondList[i2].split("\\|")[1];
+                                sourceIdSql.append(decExtraName + " = '" + decExtraValue + "' ");
+                                if(i2 < sourceCondList.length - 1){
+                                    sourceIdSql.append(" or ");
+                                }
+                            }
+                            sourceIdSql.append(" ) ");
+                        } else {
+                            //如果是单个
+                            String decExtraName = sourceCondTemp.split("\\|")[0];
+                            String decExtraValue = sourceCondTemp.split("\\|")[1];
+                            sourceIdSql.append(" and " + decExtraName + " = '" + decExtraValue + "' ") ;
+                        }
+                    }
+
+                    //查询出表达式二表的数据
+                    sourceDataList = jdbcTemplatePrimary.queryForList(Common.replaceFun(sourceIdSql.toString()), new Object[]{years});
+                    sourceIds = sourceDataList.stream().map(stringObjectMap -> stringObjectMap.get("id")).collect(Collectors.toList()).toArray(new Object[sourceDataList.size()]);
+
+                    //如果表达式二的表有数据
+                    if(sourceIds.length > 0){
+
+                        for (int sourceIdInt = 0; sourceIdInt < sourceIds.length; sourceIdInt++) {
+
+                            //表达式二可能存在多个字段的比较
+                            StringBuilder sourceSql = new StringBuilder(" select ");
+                            for (int i2 = 0; i2 < sourceFields.length; i2++) {
+                                sourceSql.append("case when sum(" + sourceFields[i2] + ") "
+                                        + sourceOpt
+                                        + " then 1 else 0 end as sumflag" + i2
+                                        + ", sum(" + sourceFields[i2] + ") as sumvalue" + i2);
+                                if(i2 < sourceFields.length - 1){
+                                    sourceSql.append(", ");
+                                }
+                            }
+                            sourceSql.append(" from " + sourceExpressTableName
+                                    + " where 1=1 and id = " + sourceIds[sourceIdInt]);
+
+                            List<Map<String, Object>> sourceList = jdbcTemplatePrimary.queryForList(sourceSql.toString());
+
+                            //逐个进行表达式二的字段判断
+                            for (Map<String, Object> map : sourceList) {
+                                for (int i2 = 0; i2 < map.keySet().size(); i2++) {
+                                    Integer sumFlag = (Integer) map.get("sumflag" + i2);
+                                    BigDecimal sumValue = (BigDecimal) map.get("sumvalue" + i2);
+
+                                    if(Objects.isNull(sumValue)){
+                                        sumValue = new BigDecimal(0);
+                                    }
+
+                                    if(Objects.isNull(sumFlag)){
+                                        continue;
+                                    }
+
+                                    if(sumFlag.equals(0)){
+                                        CheckVO checkReturnValue = new CheckVO(id, fileList.getTableName(), fileList.getShortDis(),
+                                                distId.toString(), distName.toString(), lx.toString()
+                                                , lxName.toString()
+                                                ,  outer.getDetail()+ "不满足！", value1
+                                                , sumValue, value1.subtract(sumValue));
+                                        rvalue.add(checkReturnValue);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return rvalue;
 
     }

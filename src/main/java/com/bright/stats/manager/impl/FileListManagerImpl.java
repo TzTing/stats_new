@@ -521,6 +521,38 @@ public class FileListManagerImpl implements FileListManager {
 
 
 
+    /**
+     * 获取多个FileList(不区分表类型TableType, 并且查所有)
+     *
+     * @param typeCode 模式
+     * @param years    年份
+     * @param months   月份
+     * @return 多个FileList
+     */
+    @Override
+    public List<FileList> listFileLists(String typeCode, Integer years, Integer months) {
+
+        //查询出所有filelist关联的配置内容
+        List<FileList> fileLists = fileListRepository.findFileList(typeCode, years);
+        for (int i = 0; i < fileLists.size(); i++) {
+            FileList fileList = fileLists.get(i);
+            Integer fileListYears = fileList.getYears();
+            String fileListTableName = fileList.getTableName();
+            String tableType = fileList.getTableType();
+
+            //设置fileList 所有的fileItem
+            if (FileListConstant.FILE_LIST_TABLE_TYPE_ANALYSIS.equals(tableType)) {
+                fileList.setFileItems(fileItemRepository.findFileItem(fileListYears, "ans_" + fileList.getAnsNo()));
+            } else {
+                fileList.setFileItems(fileItemRepository.findFileItem(fileListYears, fileListTableName));
+            }
+
+        }
+        
+        return fileLists;
+    }
+
+
 
     public List<List<HtmlFileItem>> getHTMLFileItems(List<FileItem> fileItems) {
         List<List<HtmlFileItem>> rvalue = new ArrayList<List<HtmlFileItem>>();

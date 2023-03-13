@@ -546,14 +546,21 @@ public class BaseDataServiceImpl implements BaseDataService {
                     //获取小数位数
                     Integer unitSize = disFormat.split("\\.").length < 2 ? 0 : disFormat.split("\\.")[1].length();
 
-                    BigDecimal value = (BigDecimal)tempRes.get(fileItem.getFieldName());
+                    if(Objects.isNull(tempRes.get(fileItem.getFieldName()))){
+                        tempRes.put(fileItem.getFieldName(), new BigDecimal(0).setScale(unitSize));
+                    } else {
+                        BigDecimal value = new BigDecimal(tempRes.get(fileItem.getFieldName()).toString());
+                        tempRes.put(fileItem.getFieldName(), value.setScale(unitSize, BigDecimal.ROUND_DOWN));
+                    }
+
+                   /* BigDecimal value = (BigDecimal)tempRes.get(fileItem.getFieldName());
                     //值为空重新赋值
                     if(Objects.isNull(value)){
                         tempRes.put(fileItem.getFieldName(), new BigDecimal(0).setScale(unitSize));
                     } else {
                         //不为空处理数值位数
                         tempRes.put(fileItem.getFieldName(), value.setScale(unitSize, BigDecimal.ROUND_DOWN));
-                    }
+                    }*/
                 }
             }
 
@@ -589,14 +596,21 @@ public class BaseDataServiceImpl implements BaseDataService {
                             //获取小数位数
                             Integer unitSize = disFormat.split("\\.").length < 2 ? 0 : disFormat.split("\\.")[1].length();
 
-                            BigDecimal value = (BigDecimal)tempRes.get(fileItem.getFieldName());
+                            if(Objects.isNull(tempRes.get(fileItem.getFieldName()))){
+                                tempRes.put(fileItem.getFieldName(), new BigDecimal(0).setScale(unitSize));
+                            } else {
+                                BigDecimal value = new BigDecimal(tempRes.get(fileItem.getFieldName()).toString());
+                                tempRes.put(fileItem.getFieldName(), value.setScale(unitSize, BigDecimal.ROUND_DOWN));
+                            }
+
+                            /*BigDecimal value = (BigDecimal)tempRes.get(fileItem.getFieldName());
                             //值为空重新赋值
                             if(Objects.isNull(value)){
                                 tempRes.put(fileItem.getFieldName(), new BigDecimal(0).setScale(unitSize));
                             } else {
                                 //不为空处理数值位数
                                 tempRes.put(fileItem.getFieldName(), value.setScale(unitSize, BigDecimal.ROUND_DOWN));
-                            }
+                            }*/
                         }
                     }
 

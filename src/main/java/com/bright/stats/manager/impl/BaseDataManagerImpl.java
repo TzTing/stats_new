@@ -110,7 +110,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
         StringBuffer sqlStringBuffer = new StringBuffer();
         sqlStringBuffer.append("select ").append(filed).append(" from ").append(fileList.getTableName());
         StringBuffer sqlWhereStringBuffer = new StringBuffer(" where 1=1 ");
-        Map<String, Object> parameterMap = new HashMap<>(16);
+        Map<String, Object> parameterMap = new LinkedHashMap<>(16);
 
         sqlWhereStringBuffer.append(" and distId like :distNo ");
         if (distNo.equals("0")) {
@@ -208,55 +208,19 @@ public class BaseDataManagerImpl implements BaseDataManager {
         }
 
         if (Objects.nonNull(pageNumber) && Objects.nonNull(pageSize) && isPage) {
-            StringBuffer sqlCountStringBuffer = new StringBuffer("select count(*) from ");
-            sqlCountStringBuffer.append(fileList.getTableName());
-            sqlCountStringBuffer.append(sqlWhereStringBuffer);
-            Query nativeQueryCount = entityManagerPrimary.createNativeQuery(sqlCountStringBuffer.toString());
-            for (String parameterKey : parameterMap.keySet()) {
-                nativeQueryCount.setParameter(parameterKey, parameterMap.get(parameterKey));
-            }
-            Long counts = Long.valueOf(nativeQueryCount.getSingleResult().toString());
-
-            sqlStringBuffer.append(sqlOrderByStringBuffer);
-            Query nativeQuery = entityManagerPrimary.createNativeQuery(sqlStringBuffer.toString());
-
-            for (String parameterKey : parameterMap.keySet()) {
-                nativeQuery.setParameter(parameterKey, parameterMap.get(parameterKey));
-            }
-            nativeQuery.setFirstResult(pageNumber * pageSize);
-            nativeQuery.setMaxResults(pageSize);
 
 
             if("rep905".equalsIgnoreCase(fileList.getTableName()) || "rep906".equalsIgnoreCase(fileList.getTableName())){
 
-                StringBuffer sqlCountStringBufferOther = new StringBuffer();
-                sqlCountStringBufferOther.append("select count(*) from ( select ")
-                        .append(filed)
-                        .append(", ztid as ztid")
-                        .append(" from ").append(fileList.getTableName()).append(sqlWhereStringBuffer).append(" ) as t1 ")
-                        .append(" left join ( select * from distEx where 1 = 1 and distid like '")
-                        .append("0".equalsIgnoreCase(distNo) ? "%" : distNo + "%")
-                        .append("'")
-                        .append(" and tablename = '")
-                        .append(fileList.getTableName())
-                        .append("'")
-                        .append(" and years = ")
-                        .append(years)
-                        .append(") as t2 on t1.ztid = t2.ztid order by ")
-                        .append("isnull(t2.parent_id, t2.ztid), t2.ztTypeId");
 
-                Query nativeQueryCountOther = entityManagerPrimary.createNativeQuery(sqlCountStringBufferOther.toString());
-                for (String parameterKey : parameterMap.keySet()) {
-                    nativeQueryCountOther.setParameter(parameterKey, parameterMap.get(parameterKey));
-                }
-
-                Long countsOther = Long.valueOf(nativeQueryCountOther.getSingleResult().toString());
-
-
-
+//                List<String> fileItemCollect2 =
+//                        fileItems.stream().map(fileItem -> "t1." + fileItem.getFieldName() + " as " + fileItem.getFieldName()).collect(Collectors.toList());
 
                 StringBuffer sqlStringBufferOther = new StringBuffer();
-                sqlStringBufferOther.append("select t1.* from ( select * ")
+                sqlStringBufferOther.append("select ")
+//                        .append(String.join(", ", fileItemCollect2))
+                        .append(" t1.* ")
+                        .append(" from ( select * ")
                         .append(" from ").append(fileList.getTableName()).append(sqlWhereStringBuffer).append(" ) as t1 ")
                         .append(" left join ( select * from distEx where 1 = 1 and distid like '")
                         .append("0".equalsIgnoreCase(distNo) ? "%" : distNo + "%")
@@ -304,18 +268,51 @@ public class BaseDataManagerImpl implements BaseDataManager {
                 }
 
 
-                Query nativeQueryOther = entityManagerPrimary.createNativeQuery(sqlStringBufferOther.toString());
+                String sql = sqlStringBufferOther.toString();
 
                 for (String parameterKey : parameterMap.keySet()) {
-                    nativeQueryOther.setParameter(parameterKey, parameterMap.get(parameterKey));
+                    if(sqlValidate(parameterMap.get(parameterKey).toString())){
+                        throw new RuntimeException("非法请求参数!");
+                    }
+                    if(parameterMap.get(parameterKey) instanceof Number){
+                        sql = sql.replace(":" + parameterKey, parameterMap.get(parameterKey).toString());
+                    } else {
+                        sql = sql.replace(":" + parameterKey, "'" + parameterMap.get(parameterKey).toString() + "'");
+                    }
                 }
-                nativeQueryOther.setFirstResult(pageNumber * pageSize);
-                nativeQueryOther.setMaxResults(pageSize);
 
-                nativeQueryOther.unwrap(NativeQueryImpl.class).setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP);
-                List<Map<String, Object>> resultList = nativeQueryOther.getResultList();
-                return (T) PageResult.of(countsOther, resultList);
+//                sql += " limit " + (pageNumber * pageSize) + ", " + pageSize;
+
+//                Object[] params = parameterMap.keySet().stream().map(e -> parameterMap.get(e)).toArray(Object[]::new);
+
+                List<Map<String, Object>> list = jdbcTemplatePrimary.queryForList(sql);
+//                List<Map<String, Object>> list = jdbcTemplatePrimary.queryForList(sql, params);
+
+                Long count = Long.valueOf(list.size());
+
+                list = list.stream().skip(pageNumber * pageSize).limit(pageSize).collect(Collectors.toList());
+
+                return (T) PageResult.of(count, list);
             }
+
+
+            StringBuffer sqlCountStringBuffer = new StringBuffer("select count(*) from ");
+            sqlCountStringBuffer.append(fileList.getTableName());
+            sqlCountStringBuffer.append(sqlWhereStringBuffer);
+            Query nativeQueryCount = entityManagerPrimary.createNativeQuery(sqlCountStringBuffer.toString());
+            for (String parameterKey : parameterMap.keySet()) {
+                nativeQueryCount.setParameter(parameterKey, parameterMap.get(parameterKey));
+            }
+            Long counts = Long.valueOf(nativeQueryCount.getSingleResult().toString());
+
+            sqlStringBuffer.append(sqlOrderByStringBuffer);
+            Query nativeQuery = entityManagerPrimary.createNativeQuery(sqlStringBuffer.toString());
+
+            for (String parameterKey : parameterMap.keySet()) {
+                nativeQuery.setParameter(parameterKey, parameterMap.get(parameterKey));
+            }
+            nativeQuery.setFirstResult(pageNumber * pageSize);
+            nativeQuery.setMaxResults(pageSize);
 
             nativeQuery.unwrap(NativeQueryImpl.class).setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP);
             List<Map<String, Object>> resultList = nativeQuery.getResultList();
@@ -370,13 +367,32 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
             }
 
-            Query nativeQuery = entityManagerPrimary.createNativeQuery(sqlStringBufferOther.toString());
+            String sql = sqlStringBufferOther.toString();
+
+            for (String parameterKey : parameterMap.keySet()) {
+
+                if(sqlValidate(parameterMap.get(parameterKey).toString())){
+                    throw new RuntimeException("非法请求参数!");
+                }
+
+                if(parameterMap.get(parameterKey) instanceof Number){
+                    sql = sql.replace(":" + parameterKey, parameterMap.get(parameterKey).toString());
+                } else {
+                    sql = sql.replace(":" + parameterKey, "'" + parameterMap.get(parameterKey).toString() + "'");
+                }
+            }
+
+            List<Map<String, Object>> list = jdbcTemplatePrimary.queryForList(sql);
+
+            return (T) list;
+
+            /*Query nativeQuery = entityManagerPrimary.createNativeQuery(sqlStringBufferOther.toString());
             for (String parameterKey : parameterMap.keySet()) {
                 nativeQuery.setParameter(parameterKey, parameterMap.get(parameterKey));
             }
             nativeQuery.unwrap(NativeQueryImpl.class).setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP);
             List<Map<String, Object>> resultList = nativeQuery.getResultList();
-            return (T) resultList;
+            return (T) resultList;*/
         }
 
 
@@ -4136,5 +4152,17 @@ public class BaseDataManagerImpl implements BaseDataManager {
             }
         }
 
+    }
+
+    protected static boolean sqlValidate(String str){
+        String s = str.toLowerCase();//统一转为小写
+        String badStr =
+                "select|update|and|or|delete|insert|truncate|char|into|substr|ascii|declare|exec|count|master|into|drop|execute|table|"+
+                        "char|declare|sitename|xp_cmdshell|like|from|grant|use|group_concat|column_name|" +
+                        "information_schema.columns|table_schema|union|where|order|by|" +
+                        "'\\*|\\;|\\-|\\--|\\+|\\,|\\//|\\/|\\%|\\#";//过滤掉的sql关键字，特殊字符前面需要加\\进行转义
+        //使用正则表达式进行匹配
+        boolean matches = s.matches(badStr);
+        return matches;
     }
 }

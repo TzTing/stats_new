@@ -373,7 +373,8 @@ public class FileListManagerImpl implements FileListManager {
 
                     }
 
-                    if (!StringUtils.isEmpty(tableHeader.getPid())) {
+                    if (!StringUtils.isEmpty(tableHeader.getPid())
+                            && (tableHeader.getFixed() != null && !tableHeader.getFixed().equalsIgnoreCase("left"))) {
                         tableHeader.setWidth(null);
                     }
                     tableHeaders.add(tableHeader);

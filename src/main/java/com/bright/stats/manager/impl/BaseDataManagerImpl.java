@@ -123,8 +123,15 @@ public class BaseDataManagerImpl implements BaseDataManager {
         parameterMap.put("years", years);
 
         if (!StringUtils.isEmpty(lx) && !lx.equals("全部")) {
-            sqlWhereStringBuffer.append(" and lx=:lx ");
-            parameterMap.put("lx", lx);
+            //如果是多选的情况下 用in
+            if(lx.contains(",")){
+                sqlWhereStringBuffer.append(" and lx in (:lx) ");
+                List<String> lxs = Arrays.asList(lx.split(","));
+                parameterMap.put("lx", lxs);
+            } else {
+                sqlWhereStringBuffer.append(" and lx=:lx ");
+                parameterMap.put("lx", lx);
+            }
         }
 
         if (!StringUtils.isEmpty(lxName) && !lxName.equals("全部")) {

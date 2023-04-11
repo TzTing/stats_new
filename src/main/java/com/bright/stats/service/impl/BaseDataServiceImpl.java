@@ -866,6 +866,39 @@ public class BaseDataServiceImpl implements BaseDataService {
         }
     }
 
+    /**
+     * 根据条件获取上报情况
+     *
+     * @param distNo
+     * @param years
+     * @param months
+     * @param tableType
+     * @return true:已上报  false:未上报
+     */
+    @Override
+    public Boolean getReportSituation(String distNo, Integer years, Integer months, String tableType) {
+        List<UploadBase> reportByDistAndTableType = uploadBaseManager.findReportByDistAndTableType(years, months, distNo, tableType);
+
+        //为空 直接判定为未上报
+        if(CollectionUtils.isEmpty(reportByDistAndTableType)){
+            return false;
+        }
+
+        //为空 直接判定为未上报
+        reportByDistAndTableType = reportByDistAndTableType.stream().filter(e -> e.getDistNo().equalsIgnoreCase(distNo)).collect(Collectors.toList());
+        if(CollectionUtils.isEmpty(reportByDistAndTableType)){
+            return false;
+        }
+
+        //查到数据并且已经上报了
+        if(reportByDistAndTableType.get(0).getOkFlag()){
+            return true;
+        } else {
+            return false;
+        }
+
+    }
+
 
     public List<Map<String, Object>> funcontrast(int ttype) {
         List<Map<String, Object>> rvalue = null;

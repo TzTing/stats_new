@@ -26,7 +26,6 @@ import net.sf.json.JSONObject;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.ClassUtils;
-import org.springframework.util.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -482,5 +481,21 @@ public class BaseDataController {
     public Result initUploadData(@RequestBody InitUploadDataDTO initUploadDataDTO){
         Boolean res = baseDataService.initUploadData(initUploadDataDTO);
         return Result.success(res);
+    }
+
+
+    @ApiOperation(value = "获取数据上报情况")
+    @GetMapping("/getReportSituation")
+    public Result getReportSituation(String distNo, Integer years, Integer months, String tableType, HttpServletResponse response) {
+
+        //设置允许跨域访问该接口
+        //允许所有来源访问
+        response.addHeader("Access-Control-Allow-Origin", "*");
+        //允许访问的方式
+        response.addHeader("Access-Control-Allow-Method", "POST,GET");
+
+        Boolean reportSituation = baseDataService.getReportSituation(distNo, years, months, tableType);
+
+        return Result.success(reportSituation);
     }
 }

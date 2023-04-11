@@ -180,4 +180,14 @@ public interface BaseDataService {
      * @param mqMessagesDTO
      */
     void checkRuningAll(MqMessagesDTO mqMessagesDTO);
+
+    /**
+     * 根据条件获取上报情况
+     * @param distNo
+     * @param years
+     * @param months
+     * @param tableType
+     * @return true:已上报  false:未上报
+     */
+    Boolean getReportSituation(String distNo, Integer years, Integer months, String tableType);
 }

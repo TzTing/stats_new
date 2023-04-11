@@ -284,7 +284,16 @@ public class BaseDataManagerImpl implements BaseDataManager {
                     if(parameterMap.get(parameterKey) instanceof Number){
                         sql = sql.replace(":" + parameterKey, parameterMap.get(parameterKey).toString());
                     } else {
-                        sql = sql.replace(":" + parameterKey, "'" + parameterMap.get(parameterKey).toString() + "'");
+                        String lxTemp = "";
+                        //如果是替换'lx'字段的值 且lx是多选的情况下 拼接的语句是in 要做处理
+                        if(parameterKey.equalsIgnoreCase("lx") && lx.contains(",")){
+                            lxTemp = Arrays.asList(lx.split(",")).stream().map(e -> "'" + e + "'").collect(Collectors.joining(","));
+                        }
+                        if(StringUtils.isBlank(lxTemp)){
+                            sql = sql.replace(":" + parameterKey, "'" + parameterMap.get(parameterKey).toString() + "'");
+                        } else {
+                            sql = sql.replace(":" + parameterKey, lxTemp);
+                        }
                     }
                 }
 
@@ -385,7 +394,16 @@ public class BaseDataManagerImpl implements BaseDataManager {
                 if(parameterMap.get(parameterKey) instanceof Number){
                     sql = sql.replace(":" + parameterKey, parameterMap.get(parameterKey).toString());
                 } else {
-                    sql = sql.replace(":" + parameterKey, "'" + parameterMap.get(parameterKey).toString() + "'");
+                    String lxTemp = "";
+                    //如果是替换'lx'字段的值 且lx是多选的情况下 拼接的语句是in 要做处理
+                    if(parameterKey.equalsIgnoreCase("lx") && lx.contains(",")){
+                        lxTemp = Arrays.asList(lx.split(",")).stream().map(e -> "'" + e + "'").collect(Collectors.joining(","));
+                    }
+                    if(StringUtils.isBlank(lxTemp)){
+                        sql = sql.replace(":" + parameterKey, "'" + parameterMap.get(parameterKey).toString() + "'");
+                    } else {
+                        sql = sql.replace(":" + parameterKey, lxTemp);
+                    }
                 }
             }
 

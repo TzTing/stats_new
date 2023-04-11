@@ -14,10 +14,7 @@ import com.bright.stats.pojo.query.ExistDataQuery;
 import com.bright.stats.pojo.query.UploadBaseQuery;
 import com.bright.stats.pojo.vo.*;
 import com.bright.stats.service.BaseDataService;
-import com.bright.stats.util.Common;
-import com.bright.stats.util.DataConstants;
-import com.bright.stats.util.ExcelUtilPOI;
-import com.bright.stats.util.ReplaceSqlUtil;
+import com.bright.stats.util.*;
 import com.bright.stats.web.websocket.WebSocket;
 import com.sun.org.apache.xpath.internal.operations.Bool;
 import lombok.RequiredArgsConstructor;
@@ -164,6 +161,31 @@ public class BaseDataServiceImpl implements BaseDataService {
         String username = user.getUsername();
 
         List<InteractiveVO> interactiveVOS = new ArrayList<>();
+
+        //上报前需要先校验当前级别和下级的汇总数是否一直
+        if("待办事项_上报".equalsIgnoreCase(dpName)){
+            //查询上报的年份
+            UploadBase uploadBase = uploadBaseManager.findById(new Integer(keyword.split("_")[0]));
+
+            //查询当前地区的最大长度
+            int maxDistLen = distManager.getCurrMaxDistNoLength(uploadBase.getDistNo(), uploadBase.getYears());
+
+            //如果当前地区和操作的地区一样 不在执行汇总
+            if(maxDistLen != uploadBase.getDistNo().length()){
+                SummaryDTO summaryDTO = new SummaryDTO();
+
+                summaryDTO.setYears(uploadBase.getYears());
+                summaryDTO.setMonths(uploadBase.getMonths());
+                summaryDTO.setDistNo(uploadBase.getDistNo());
+                summaryDTO.setUserDistNo(user.getTjDistNo());
+                summaryDTO.setTypeCode(tableType);
+
+                SummaryVO summaryVO = summaryCodingRun(summaryDTO);
+                if(!summaryVO.getRvalue()){
+                    throw new RuntimeException("上报数据失败");
+                }
+            }
+        }
 
         List<DataProcessNew> dataProcessNews = dataProcessNewManager.listDataProcessNews(dpName, tableType, -1);
 
@@ -532,6 +554,13 @@ public class BaseDataServiceImpl implements BaseDataService {
                 for (int i1 = 0; i1 < fileItems.size(); i1++) {
                     FileItem fileItem = fileItems.get(i1);
 
+                    //如果不是数值类型且存在
+                    if(!"N".equalsIgnoreCase(fileItem.getFType()) && tempRes.containsKey(fileItem.getFieldName())){
+                        //把value的值由null换成空字符串
+                        tempRes.put(fileItem.getFieldName(), Objects.isNull(tempRes.get(fileItem.getFieldName()))
+                                ? "" : tempRes.get(fileItem.getFieldName()));
+                    }
+
                     //不是数值类型 或者不存在key 跳过
                     if(!"N".equalsIgnoreCase(fileItem.getFType())
                             || !tempRes.containsKey(fileItem.getFieldName())
@@ -571,6 +600,13 @@ public class BaseDataServiceImpl implements BaseDataService {
             List<FileList> fileLists = fileListManager.listFileLists(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months, userDistNo);
             for (FileList fileList : fileLists) {
                 baseDataQuery.setTableName(fileList.getTableName());
+
+                //在导出所有表的情况下 如果选择了类型条件，有些表没有'lx'则导出全部
+                if(CollectionUtils.isEmpty(fileList.getFileItemLinkExs())){
+                    baseDataQuery.setLx("全部");
+                } else {
+                    baseDataQuery.setLx(lx);
+                }
                 List<Map<String, Object>> list = baseDataManager.listTableData(baseDataQuery, false, List.class);
 
                 List<FileItem> fileItems = fileList.getFileItems();
@@ -583,6 +619,14 @@ public class BaseDataServiceImpl implements BaseDataService {
 
                         for (int i1 = 0; i1 < fileItems.size(); i1++) {
                             FileItem fileItem = fileItems.get(i1);
+
+
+                            //如果不是数值类型且存在
+                            if(!"N".equalsIgnoreCase(fileItem.getFType()) && tempRes.containsKey(fileItem.getFieldName())){
+                                //把value的值由null换成空字符串
+                                tempRes.put(fileItem.getFieldName(), Objects.isNull(tempRes.get(fileItem.getFieldName()))
+                                        ? "" : tempRes.get(fileItem.getFieldName()));
+                            }
 
                             //不是数值类型 或者不存在key 跳过
                             if(!"N".equalsIgnoreCase(fileItem.getFType()) || !tempRes.containsKey(fileItem.getFieldName())){
@@ -636,10 +680,10 @@ public class BaseDataServiceImpl implements BaseDataService {
         exportExcelVO.setMonths(months);
         exportExcelVO.setUserDistName(distName);
         exportExcelVO.setDistname(distName);
-        exportExcelVO.setDateStr("2022-07-07");
-        exportExcelVO.setCuryear("2022");
-        exportExcelVO.setCurmonth("07");
-        exportExcelVO.setCurday("07");
+        exportExcelVO.setDateStr(DateUtil.getDate(new Date()));
+        exportExcelVO.setCuryear(DateUtil.getDate(new Date(), 1));
+        exportExcelVO.setCurmonth(DateUtil.getDate(new Date(), 2));
+        exportExcelVO.setCurday(DateUtil.getDate(new Date(), 3));
         exportExcelVO.setData(data);
         exportExcelVO.setExcelTemplatePath(excelTemplate.getName());
         exportExcelVO.setFileName(excelTemplate.getFileName());
@@ -828,6 +872,75 @@ public class BaseDataServiceImpl implements BaseDataService {
         String sql = "select mysql_fun, sql_fun, valuedec, sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
         rvalue = jdbcTemplatePrimary.queryForList(sql, new Object[]{ttype});
         return rvalue;
+    }
+
+
+    /**
+     * 校验上报前上下级汇总数据的一致性
+     * @return
+     */
+    public boolean verificationGatherUniformity(String keyword, User user){
+        String[] idAndDistNo = keyword.split("_");
+        Integer id = new Integer(idAndDistNo[0]);
+        String distNo = idAndDistNo[1];
+
+        String tableType = user.getTableType().getTableType();
+        String userDistNo = user.getTjDistNo();
+        String username = user.getUsername();
+
+        //查询上报的年份
+        UploadBase uploadBase = uploadBaseManager.findById(id);
+
+        //查询要上报的所有表
+        List<FileList> fileLists
+                = fileListManager.listFileLists(tableType, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, uploadBase.getYears(), uploadBase.getMonths(), userDistNo);
+
+
+        for (FileList fileList : fileLists) {
+            List<FileItem> fileItems = fileList.getFileItems();
+            List<String> fieldList = new ArrayList<>();
+            for (FileItem fileItem : fileItems) {
+                if("1".equalsIgnoreCase(fileItem.getDisFlag()) && "N".equalsIgnoreCase(fileItem.getFType())){
+                    fieldList.add(fileItem.getFieldName());
+                }
+            }
+
+            String fieldNames = fieldList.stream().map(e -> "sum(" + e + ") as " + e).collect(Collectors.joining(", "));
+
+            //查询下级数据的汇总
+            String downLevelSql = "select " + fieldNames + " from " + fileList.getTableName()
+                    + " where 1 = 1 and distid like '" + distNo + "%' and distid <> " + "'" + distNo + "' "
+                    + " and years = " + uploadBase.getYears();
+
+            String currentLevelSql = "select " + fieldNames + " from " + fileList.getTableName()
+                    + " where 1 = 1 and distid = " + "'" + distNo + "' "
+                    + " and years = " + uploadBase.getYears();
+
+
+            if(!CollectionUtils.isEmpty(fileList.getFileItemLinkExs())){
+                //如果有类型则只判断汇总数
+                downLevelSql = downLevelSql + " and lx = '汇总数'";
+                currentLevelSql = currentLevelSql + " and lx = '汇总数'";
+            }
+
+            List<Map<String, Object>> downLevelDataList = jdbcTemplatePrimary.queryForList(downLevelSql);
+            List<Map<String, Object>> currentLevelDataList = jdbcTemplatePrimary.queryForList(currentLevelSql);
+
+            if(CollectionUtils.isEmpty(downLevelDataList) || CollectionUtils.isEmpty(currentLevelDataList)){
+                throw new RuntimeException("没有对应的上报基础数据!");
+            }
+
+            Map<String, Object> downLevelData = downLevelDataList.get(0);
+            Map<String, Object> currentLevelData = currentLevelDataList.get(0);
+
+            for (String s : downLevelData.keySet()) {
+                if(!downLevelData.get(s).equals(currentLevelData.get(s))){
+                    throw new RuntimeException(fileList.getTableDis() + "：未进行汇总稽核!");
+                }
+            }
+        }
+
+        return true;
     }
 
 

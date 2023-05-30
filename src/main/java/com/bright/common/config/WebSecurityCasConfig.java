@@ -64,6 +64,7 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
         http.authorizeRequests() //配置安全策略
                 .antMatchers("/login", "/send").permitAll()
                 .antMatchers("/static/**").permitAll()
+                .antMatchers("/baseData/getReportSituation").permitAll()
 //                .antMatchers("/**").permitAll()
                 .anyRequest().authenticated() //所有请求都要验证
                 .and()

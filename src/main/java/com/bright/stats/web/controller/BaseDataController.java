@@ -338,7 +338,7 @@ public class BaseDataController {
 
         response.setCharacterEncoding("utf-8");
         try {
-            response.addHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode(exportExcelVO.getFileName(), "utf-8"));
+            response.addHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode(exportExcelVO.getDistname() + "_" + exportExcelVO.getFileName(), "utf-8"));
         } catch (UnsupportedEncodingException e) {
             throw new RuntimeException(e);
         }

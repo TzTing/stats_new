@@ -3,10 +3,7 @@ package com.bright.common.config;
 import com.bright.common.handler.CasAuthenticationSuccessHandler;
 import com.bright.common.handler.LogoutRemoveUserHandler;
 import com.bright.common.properties.CasProperties;
-import com.bright.common.security.CasAuthenticationEntryPointImpl;
-import com.bright.common.security.CasSessionAuthenticationStrategy;
-import com.bright.common.security.CasUserDetailsServiceImpl;
-import com.bright.common.security.OnlineUserFilter;
+import com.bright.common.security.*;
 import org.jasig.cas.client.session.SingleSignOutFilter;
 import org.jasig.cas.client.validation.Cas20ServiceTicketValidator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -134,8 +131,8 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
     }
 
     @Bean
-    public CasAuthenticationProvider casAuthenticationProvider() {
-        CasAuthenticationProvider casAuthenticationProvider = new CasAuthenticationProvider();
+    public CasAuthenticationProviderExt casAuthenticationProvider() {
+        CasAuthenticationProviderExt casAuthenticationProvider = new CasAuthenticationProviderExt();
         casAuthenticationProvider.setServiceProperties(serviceProperties());
         casAuthenticationProvider.setTicketValidator(cas20ServiceTicketValidator());
         casAuthenticationProvider.setAuthenticationUserDetailsService(casUserDetailsService);
@@ -144,8 +141,8 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
     }
 
     @Bean
-    public Cas20ServiceTicketValidator cas20ServiceTicketValidator() {
-        Cas20ServiceTicketValidator cas20ServiceTicketValidator = new Cas20ServiceTicketValidator(casProperties.getCasServerUrl());
+    public Cas20ProxyTicketValidatorExt cas20ServiceTicketValidator() {
+        Cas20ProxyTicketValidatorExt cas20ServiceTicketValidator = new Cas20ProxyTicketValidatorExt(casProperties.getCasServerUrl());
         cas20ServiceTicketValidator.setEncoding("UTF-8");
         return cas20ServiceTicketValidator;
     }

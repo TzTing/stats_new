@@ -588,7 +588,9 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
 
                 for (int i = 0; i < parameters.length; i++) {
-                    arg0.setObject(i + 1, ((parameters[i] == null || StringUtils.equals(parameters[i].toString(), "null"))) ? "" : parameters[i]);
+//                    arg0.setObject(i + 1, ((parameters[i] == null || StringUtils.equals(parameters[i].toString(), "null"))) ? "" : parameters[i]);
+                    // 20230602 人大金仓 int类型字段不能用空字符串更新
+                    arg0.setObject(i + 1, ((parameters[i] == null || StringUtils.equals(parameters[i].toString(), "null"))) ? null : parameters[i]);
                 }
             }
         });
@@ -3280,7 +3282,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
     public List<Map<String, Object>> funcontrast(int ttype) {
         List<Map<String, Object>> rvalue = null;
-        String sql = "select mysql_fun, sql_fun, valuedec, sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
+        String sql = "select mysql_fun, sql_fun, valuedec, sqlstr, kingbase_sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
         rvalue = jdbcTemplatePrimary.queryForList(sql, new Object[]{ttype});
         return rvalue;
     }

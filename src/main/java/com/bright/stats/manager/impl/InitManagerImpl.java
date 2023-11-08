@@ -67,6 +67,13 @@ public class InitManagerImpl implements InitManager {
             if (rvalue == null) {
                 rvalue = DataConstants.SZDB;
             }
+        } else if (StringUtils.equalsIgnoreCase(DataConstants.SQLTYPE, "kingbase")) {
+            try {
+                rvalue = jdbcTemplateSecond.getDataSource().getConnection().getSchema();
+            } catch (SQLException e) {
+                System.err.println("ReplaceSqlUtil.class 获取三资数据名失败。");
+                e.printStackTrace();
+            }
         } else {
             try {
                 rvalue = jdbcTemplateSecond.getDataSource().getConnection().getCatalog();

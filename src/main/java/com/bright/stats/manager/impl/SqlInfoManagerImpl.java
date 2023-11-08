@@ -472,7 +472,7 @@ public class SqlInfoManagerImpl implements SqlInfoManager {
         String sql = "${sycolumn}";
 
         List<Map<String, Object>> rvalue1 = null;
-        String sql1 = "select mysql_fun, sql_fun, valuedec, sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
+        String sql1 = "select mysql_fun, sql_fun, valuedec, sqlstr, kingbase_sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
         rvalue1 = jdbcTemplatePrimary.queryForList(sql1, new Object[]{2});
 
         List<Map<Object, Object>> mapList = new ArrayList<>();

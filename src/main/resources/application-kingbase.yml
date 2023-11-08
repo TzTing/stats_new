@@ -1,0 +1,110 @@
+spring:
+  datasource:
+    primary:
+#      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+#      jdbc-url: jdbc:sqlserver://192.168.0.18;DataBaseName=analysis_szqc_nb_new
+#      username: sa
+#      password: 123456
+      type: com.zaxxer.hikari.HikariDataSource
+      driver-class-name: com.kingbase8.Driver
+      jdbc-url: jdbc:kingbase8://192.168.0.132:54321/analysisnb
+      username: analysis_gz_new
+      password: ZCJY38259201
+      auto-commit: true
+      #空闲连接超时时长
+      idle-timeout: 60000
+      #连接超时时长
+      connection-timeout: 60000
+      #最大生命周期，0不过期
+      max-lifetime: 1800000
+      #最小空闲连接数
+      minimum-idle: 10
+      #最大连接数量
+      maximum-pool-size: 30
+      #dialect: org.hibernate.dialect.DmDialect
+
+
+    second:
+#      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+#      jdbc-url: jdbc:sqlserver://192.168.0.18;DataBaseName=zcjy_by
+#      username: sa
+#      password: 123456
+      type: com.zaxxer.hikari.HikariDataSource
+      driver-class-name: com.kingbase8.Driver
+      jdbc-url: jdbc:kingbase8://192.168.0.132:54321/analysisnb
+      username: zcjy_tdnz_gz
+      password: ZCJY38259201
+      auto-commit: true
+      #空闲连接超时时长
+      idle-timeout: 60000
+      #连接超时时长
+      connection-timeout: 60000
+      #最大生命周期，0不过期
+      max-lifetime: 1800000
+      #最小空闲连接数
+      minimum-idle: 10
+      #最大连接数量
+      maximum-pool-size: 30
+      #dialect: org.hibernate.dialect.DmDialect
+
+    third:
+      #      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      #      jdbc-url: jdbc:sqlserver://192.168.0.18;DataBaseName=zcjy_by
+      #      username: sa
+      #      password: 123456
+      type: com.zaxxer.hikari.HikariDataSource
+      driver-class-name: dm.jdbc.driver.DmDriver
+      jdbc-url: jdbc:dm://59.42.10.20:5236/BJACCOUNT_ZS?clobAsString=true
+      username: BJACCOUNT_ZS
+      password: ZCJY38259201
+#      hikari:
+#        connection-timeout: 60000   # 数据库连接超时时间,默认30秒,即30000
+#        validation-timeout: 3000    # 指定验证连接有效性的超时时间(默认是5秒,最小不能小于250毫秒)
+#        idle-timeout: 60000         # 空闲连接超时时间,一个连接idle状态的最大时长（毫秒）,超时则被释放（retired）,默认是10分钟,只有空闲连接数大于最大连接数且空闲时间超过该值,才会被释放
+#        login-timeout: 5            # 指定连接数据库的超时时间,单位:秒
+#        max-lifetime: 70000         # 指定连接池中连接的最大生存时间,单位:毫秒.默认是1800000,即30分钟
+#        maximum-pool-size: 30       # 指定连接池最大的连接数,包括使用中的和空闲的连接,默认值10
+#        minimum-idle: 10            # 指定连接维护的最小空闲连接数,当使用HikariCP时指定
+#        read-only: false            # 当使用Hikari connection pool时,是否标记数据源只读
+  jpa:
+    database-platform: org.hibernate.dialect.Kingbase8Dialect
+    show-sql: false
+    hibernate:
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+
+
+
+#客户端地址
+app:
+  server:
+    host:
+      url: http://192.168.0.18:8081/stats_api
+  login:
+    url: /login
+  logout:
+    url: /logout
+
+  #前端首页地址
+  home:
+    url: http://192.168.0.18:8081/dist/#/msxz
+
+#cas认证中心地址
+cas:
+  server:
+    host: http://192.168.0.18:8080/cas
+    login_url: http://192.168.0.18:8080/cas/login
+    logout_url: http://192.168.0.18:8080/cas/logout
+#cas:
+#  server:
+#    host: http://192.168.0.101:8024/cas
+#    login_url: http://192.168.0.101:8024/cas/login
+#    logout_url: http://192.168.0.101:8024/cas/logout?service=http://192.168.0.18:9898/apis/login
+
+stats:
+  asset-database: analysis_szqc2021
+
+logging:
+  level:
+    org.hibernate.type.descriptor.sql.BasicBinder: trace
+#    org.hibernate.type.descriptor.sql.BasicBinder: debug

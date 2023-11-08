@@ -45,6 +45,10 @@ public class Common {
 				String aa =  map.get("sqlstr").toString();
 				System.out.println(aa);
 				sql=sql.toLowerCase().replace("${"+map.get("mysql_fun").toString().toLowerCase()+"}",map.get("sqlstr").toString());
+			} else if (StringUtils.equalsIgnoreCase(DataConstants.SQLTYPE,"kingbase")) {
+				String aa = map.get("kingbase_sqlstr").toString();
+				System.out.println(aa);
+				sql = sql.toLowerCase().replace("${" + map.get("mysql_fun").toString().toLowerCase() + "}", map.get("kingbase_sqlstr").toString());
 			}else{
 				if(DataConstants.ISMYSQL==1){
 					sql=sql.toLowerCase().replace("${"+map.get("mysql_fun").toString().toLowerCase()+"}",map.get("valuedec").toString());
@@ -62,10 +66,14 @@ public class Common {
 		if(null==raDatas || raDatas.size()==0)return sql;
 		for (Map<String, Object> map : raDatas) {
 			if(sql.indexOf("${")==-1)break;
-			if(StringUtils.equalsIgnoreCase(DataConstants.SQLTYPE,"dm")){
-				String aa =  map.get("sqlstr").toString();
+			if(StringUtils.equalsIgnoreCase(DataConstants.SQLTYPE,"dm")) {
+				String aa = map.get("sqlstr").toString();
 				System.out.println(aa);
-				sql=sql.toLowerCase().replace("${"+map.get("mysql_fun").toString().toLowerCase()+"}",map.get("sqlstr").toString());
+				sql = sql.toLowerCase().replace("${" + map.get("mysql_fun").toString().toLowerCase() + "}", map.get("sqlstr").toString());
+			} else if (StringUtils.equalsIgnoreCase(DataConstants.SQLTYPE,"kingbase")) {
+				String aa = map.get("kingbase_sqlstr").toString();
+				System.out.println(aa);
+				sql = sql.toLowerCase().replace("${" + map.get("mysql_fun").toString().toLowerCase() + "}", map.get("kingbase_sqlstr").toString());
 			}else{
 				if(DataConstants.ISMYSQL==1){
 					sql=sql.toLowerCase().replace("${"+map.get("mysql_fun").toString().toLowerCase()+"}",map.get("valuedec").toString());

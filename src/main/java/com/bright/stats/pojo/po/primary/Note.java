@@ -29,7 +29,8 @@ public class Note implements Serializable {
     private String sqlStr;
 
     @Column(name = "visible")
-    private Integer visible;
+//    private Integer visible;
+    private Boolean visible;
 
     @Column(name = "disId")
     private String disId;

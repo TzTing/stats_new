@@ -587,7 +587,7 @@ public class QueryCenterServiceImpl implements QueryCenterService {
 
     public List<Map<String, Object>> funcontrast(int ttype) {
         List<Map<String, Object>> rvalue = null;
-        String sql = "select mysql_fun, sql_fun, valuedec, sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
+        String sql = "select mysql_fun, sql_fun, valuedec, sqlstr, kingbase_sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
         rvalue = jdbcTemplatePrimary.queryForList(sql, new Object[]{ttype});
         return rvalue;
     }

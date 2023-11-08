@@ -16,7 +16,6 @@ import com.bright.stats.pojo.vo.*;
 import com.bright.stats.service.BaseDataService;
 import com.bright.stats.util.*;
 import com.bright.stats.web.websocket.WebSocket;
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import lombok.RequiredArgsConstructor;
 import net.sf.excelutils.ExcelException;
 import net.sf.json.JSONObject;
@@ -210,7 +209,8 @@ public class BaseDataServiceImpl implements BaseDataService {
 
                 List<Map<String, Object>> maps = null;
                 if (dataProcessNew.getIsAlert()) {
-                    maps = jdbcTemplatePrimary.queryForList(processSql);
+//                    maps = jdbcTemplatePrimary.queryForList(processSql);
+                    maps = JdbcUtil.queryForMapListGetFirstResultSet(jdbcTemplatePrimary, processSql);
 
                     if (!CollectionUtils.isEmpty(maps)) {
 
@@ -219,7 +219,8 @@ public class BaseDataServiceImpl implements BaseDataService {
                         alertSql = alertSql.replace("${writer}", username);
                         alertSql = alertSql.replace("${filelist}", fileListSql);
 
-                        List<String> strings = jdbcTemplatePrimary.queryForList(alertSql, String.class);
+//                        List<String> strings = jdbcTemplatePrimary.queryForList(alertSql, String.class);
+                        List<String> strings = JdbcUtil.queryForListGetFirstResultSet(jdbcTemplatePrimary, alertSql, String.class);
                         if (!CollectionUtils.isEmpty(strings)) {
 
                             for(String str : strings){
@@ -252,7 +253,8 @@ public class BaseDataServiceImpl implements BaseDataService {
                 List<Map<String, Object>> maps = null;
                 if (dataProcessNew.getIsAlert()) {
 
-                    maps = jdbcTemplatePrimary.queryForList(processSql);
+//                    maps = jdbcTemplatePrimary.queryForList(processSql);
+                    maps = JdbcUtil.queryForMapListGetFirstResultSet(jdbcTemplatePrimary, processSql);
 
                     if (!CollectionUtils.isEmpty(maps)) {
 
@@ -902,7 +904,7 @@ public class BaseDataServiceImpl implements BaseDataService {
 
     public List<Map<String, Object>> funcontrast(int ttype) {
         List<Map<String, Object>> rvalue = null;
-        String sql = "select mysql_fun, sql_fun, valuedec, sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
+        String sql = "select mysql_fun, sql_fun, valuedec, sqlstr, kingbase_sqlstr from fun_contrast where visible=1 and ttype=? order by disid";
         rvalue = jdbcTemplatePrimary.queryForList(sql, new Object[]{ttype});
         return rvalue;
     }

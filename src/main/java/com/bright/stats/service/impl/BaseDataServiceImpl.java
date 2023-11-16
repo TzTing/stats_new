@@ -515,6 +515,7 @@ public class BaseDataServiceImpl implements BaseDataService {
         List<String> sorts = exportExcelDTO.getSorts();
         List<Condition> conditions = exportExcelDTO.getConditions();
         String userDistNo = exportExcelDTO.getUserDistNo();
+        Boolean isGrade = exportExcelDTO.getIsGrade();
 
 
         ExcelTemplate excelTemplate = excelTemplateManager.getExcelTemplateById(excelTemplateId);
@@ -536,6 +537,7 @@ public class BaseDataServiceImpl implements BaseDataService {
         baseDataQuery.setConditions(conditions);
         baseDataQuery.setSorts(sorts);
         baseDataQuery.setUserDistNo(userDistNo);
+        baseDataQuery.setIsGrade(isGrade);
 
         if (!"多表一个Excel".equals(excelTemplate.getExcelType())) {
             List<Map<String, Object>> list = baseDataManager.listTableData(baseDataQuery, false, List.class);

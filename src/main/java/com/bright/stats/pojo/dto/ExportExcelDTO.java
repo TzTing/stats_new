@@ -26,6 +26,7 @@ public class ExportExcelDTO implements Serializable {
     private String lxName;
     private Integer grade;
     private Boolean isBalanced;
+    private Boolean isGrade;
     private Integer jxMode;
     private String distNo;
     private String userDistNo;

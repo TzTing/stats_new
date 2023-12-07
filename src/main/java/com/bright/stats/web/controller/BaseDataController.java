@@ -56,6 +56,8 @@ public class BaseDataController {
     private final RocketProduceService rocketProduceService;
     private final BaseDataService baseDataService;
 
+    private static final List<String> ALLOWED_FILE_TYPES = Arrays.asList("xls", "xlsx");
+
     @ApiOperation(value = "获取基础数据表内公式")
     @GetMapping("/ruleInner/list")
     public Result listRuleInners(@NotBlank(message = "表名不能为空") String tableName
@@ -376,6 +378,21 @@ public class BaseDataController {
         TableType tableType = SecurityUtil.getLoginUser().getTableType();
         User user = SecurityUtil.getLoginUser();
 
+        // 获取上传文件的原始文件名
+        String originalFilename = importExcelFile.getOriginalFilename();
+
+        // 获取文件扩展名
+        String fileExtension = null;
+        if (originalFilename.lastIndexOf(".") != -1 && originalFilename.lastIndexOf(".") != 0) {
+            fileExtension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1);
+        } else {
+            fileExtension = "";
+        }
+
+        // 校验文件扩展名是否在允许上传的类型列表中
+        if (!ALLOWED_FILE_TYPES.contains(fileExtension)) {
+            return Result.fail("不允许上传该类型的文件");
+        }
 
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
         String format = simpleDateFormat.format(new Date());

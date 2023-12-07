@@ -1,23 +1,19 @@
-package com.bright.stats.mq.impl;
+package com.bright.stats.mq.service.impl;
 
 import com.bright.stats.constant.RocketConstant;
 import com.bright.stats.manager.DistManager;
-import com.bright.stats.mq.RocketProduceService;
-import com.bright.stats.pojo.po.primary.Dist;
+import com.bright.stats.mq.service.RocketProduceService;
 import com.bright.stats.pojo.po.primary.MqMessage;
 import com.bright.stats.repository.primary.MqMessageRepository;
 import com.bright.stats.util.DateUtil;
 import lombok.AllArgsConstructor;
-import org.apache.rocketmq.client.producer.SendCallback;
-import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.messaging.Message;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
 
 /**
+ * 消息生产者 Server 实现
  * @author: Tz
  * @Date: 2022/10/14 16:19
  */
@@ -37,6 +33,7 @@ public class RocketProduceServiceImpl implements RocketProduceService {
         String distFullName = distManager.getDistFullName(mqMessage.getDistNo(), mqMessage.getYears());
 
         mqMessage.setDistName(distFullName);
+        //根据不同类型设置不同的主题名称
         switch (mqMessage.getTopicType()){
             case RocketConstant.TOPIC_CHECK:
                 mqMessage.setTopicName(RocketConstant.TOPIC_CHECK_NAME);

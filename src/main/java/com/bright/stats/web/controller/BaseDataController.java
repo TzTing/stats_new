@@ -4,7 +4,7 @@ import com.bright.common.result.PageResult;
 import com.bright.common.result.Result;
 import com.bright.common.util.SecurityUtil;
 import com.bright.stats.constant.RocketConstant;
-import com.bright.stats.mq.RocketProduceService;
+import com.bright.stats.mq.service.RocketProduceService;
 import com.bright.stats.pojo.dto.*;
 import com.bright.stats.pojo.model.TableHeader;
 import com.bright.stats.pojo.po.primary.FileList;

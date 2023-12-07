@@ -1,10 +1,9 @@
-package com.bright.stats.mq.impl;
+package com.bright.stats.mq.service.impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.bright.stats.constant.RocketConstant;
 import com.bright.stats.pojo.dto.CheckDTO;
-import com.bright.stats.pojo.dto.MqMessagesDTO;
 import com.bright.stats.pojo.dto.ReportDTO;
 import com.bright.stats.pojo.dto.SummaryDTO;
 import com.bright.stats.pojo.po.primary.MqMessage;
@@ -14,7 +13,6 @@ import com.bright.stats.pojo.vo.SummaryVO;
 import com.bright.stats.repository.primary.MqMessageRepository;
 import com.bright.stats.service.BaseDataService;
 import com.bright.stats.util.DateUtil;
-import org.apache.rocketmq.client.consumer.listener.MessageListener;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,14 +24,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 
 /**
+ * 队列消费者
+ *
+ * <p>RocketMQMessageListener(topic = RocketConstant.TOPIC_CONSUMER, consumerGroup = RocketConstant.TOPIC_CONSUMER + "_group"):
+ * <p>监听的主题为：RocketConstant.TOPIC_CONSUMER
+ * <p>监听的队列为：RocketConstant.TOPIC_CONSUMER + "_group"
+ *
  * @author: Tz
  * @Date: 2022/10/17 10:53
  */
@@ -56,6 +54,12 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
     @Override
     public void onMessage(MqMessage mqMessage) {
 
+        //消费稽核、汇总、上报 需要控制地区 当前地区只能有一个任务在执行, 比如我执行地区0103 则 010301地区会等待， 0104 则可以同时执行
+        //1、校验任务是否取消
+        //2、获取地区的锁
+        //3、锁住当前地区进行业务处理
+        //4、释放当前执行地区持有的锁
+
 
         Long startTime = System.currentTimeMillis();
 
@@ -69,6 +73,7 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
 //        synchronized (this) {
 
 
+        //1、校验任务是否取消
         //需要二次判断，处理锁
         synchronized (this){
             //查看这条消息是否是未消费且可用的
@@ -85,6 +90,7 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
             }
 
 
+            //2、获取地区的锁
             //如果根据key查询到了对象锁
             Enumeration enumeration = concurrentHashMap.keys();
             while(enumeration.hasMoreElements()){
@@ -140,6 +146,7 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
 
         //进入消费 表示该消息已经开始消费了
 
+        //3、锁住当前地区进行业务处理
         //如果上一次执行的地区的锁没有释放, 现在有需要没释放的锁，就会进行等待
         synchronized(object) {
             try {
@@ -244,9 +251,9 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
 
                 }
             } catch (Exception e){
-
+                e.getStackTrace();
             } finally {
-                //释放执行该地区持有的锁
+                //4、释放当前执行地区持有的锁
                 concurrentHashMap.remove(mqMessage.getDistNo());
             }
         }

@@ -104,6 +104,10 @@ public class NavigateServiceImpl implements NavigateService {
             throw new RuntimeException("当前选择的模式不存在！");
         }
 
+        if (years == null) {
+            throw new RuntimeException("必须选择年份！");
+        }
+
         if (years < tableType.getBeginYear() || years > tableType.getCurNewYear()) {
             throw new RuntimeException("选择的年份不在" + tableType.getBeginYear() + "~" + tableType.getCurNewYear() + "区间范围内！");
         }

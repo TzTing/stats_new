@@ -62,4 +62,21 @@ public class TableType implements Serializable {
     @Column(name = "curNewYear")
     private Integer curNewYear;
 
+    /**
+     * 显示名称
+     */
+    @Column(name = "showName")
+    private String showName;
+
+    /**
+     * 跳转到久项目的地址
+     */
+    @Column(name = "oldProjectUrl")
+    private String oldProjectUrl;
+
+    /**
+     * 当前系统选中的年份
+     */
+    @Transient
+    private Integer selectYear;
 }

@@ -274,7 +274,12 @@ public class BaseDataController {
         }
 
         mqMessage.setUsername(SecurityUtil.getLoginUser().getUsername());
-        mqMessage.setYears(user.getTableType().getCurNewYear());
+        if (user.getTableType().getSelectYear() != null) {
+            mqMessage.setYears(user.getTableType().getSelectYear());
+        } else {
+            mqMessage.setYears(user.getTableType().getCurNewYear());
+        }
+
         mqMessage.setMonths(user.getTableType().getCurMonth());
         mqMessage.setTypeCode(user.getTableType().getTableType());
         mqMessage.setDistNo(reportDTO.getKeyword().split("_")[1]);

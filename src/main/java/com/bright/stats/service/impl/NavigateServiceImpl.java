@@ -97,6 +97,35 @@ public class NavigateServiceImpl implements NavigateService {
     }
 
     @Override
+    public void selectMode(Integer tableTypeId, Integer years) {
+        TableType tableType = tableTypeManager.getTableTypeById(tableTypeId);
+        List<TableType> tableTypes = tableTypeManager.listTableTypes();
+        if(tableTypes.indexOf(tableType) == -1){
+            throw new RuntimeException("当前选择的模式不存在！");
+        }
+
+        if (years < tableType.getBeginYear() || years > tableType.getCurNewYear()) {
+            throw new RuntimeException("选择的年份不在" + tableType.getBeginYear() + "~" + tableType.getCurNewYear() + "区间范围内！");
+        }
+
+        //设置当前选中的年份
+        tableType.setSelectYear(years);
+
+        //用户选择模式之后将模式绑定到用户中
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        //如果没有登陆用户
+        if(Objects.isNull(principal)){
+            throw new RuntimeException("用户未登陆！");
+        }
+
+        //如果用户是登陆的状态 绑定用户选择的模式
+        SecurityUser securityUser = (SecurityUser) principal;
+        securityUser.getUser().setTableType(tableType);
+
+    }
+
+    @Override
     public List<MqMessage> listMqMessages(MqMessagesQuery mqMessagesQuery) {
 
 

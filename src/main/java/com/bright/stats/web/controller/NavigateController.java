@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.constraints.NotNull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -62,8 +63,8 @@ public class NavigateController {
 
     @ApiOperation(value = "选择模式")
     @GetMapping("/selectMode/{tableTypeId}")
-    public Result selectMode(@PathVariable Integer tableTypeId){
-        navigateService.selectMode(tableTypeId);
+    public Result selectMode(@PathVariable Integer tableTypeId, @NotNull(message = "月份不能为空") Integer years){
+        navigateService.selectMode(tableTypeId, years);
         return Result.success();
     }
 

@@ -28,7 +28,15 @@ public interface NavigateService {
      * 选择模式
      * @param tableTypeId TableTypeId
      */
+    @Deprecated
     void selectMode(Integer tableTypeId);
+
+    /**
+     *
+     * @param tableTypeId 模式id
+     * @param years       选择的年份
+     */
+    void selectMode(Integer tableTypeId, Integer years);
 
     /**
      * 查询队列消息记录

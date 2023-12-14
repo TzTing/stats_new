@@ -63,6 +63,12 @@ public class TableType implements Serializable {
     private Integer curNewYear;
 
     /**
+     * 排序号
+     */
+    @Column(name = "sortNum")
+    private Integer sortNum;
+
+    /**
      * 显示名称
      */
     @Column(name = "showName")

@@ -18,7 +18,7 @@ public interface TableTypeRepository extends JpaRepository<TableType, Integer>, 
      * 查询TableType
      * @return TableType集合
      */
-    @Query("from TableType where visible=true order by id")
+    @Query("from TableType where visible=true order by sortNum")
     List<TableType> findTableType();
 
 }

@@ -95,7 +95,16 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
         FileList fileList = fileListManager.getFileList(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, tableName, years, months, userDistNo);
         List<FileItem> fileItems = fileList.getFileItems();
-        List<String> fileItemCollect = fileItems.stream().map(fileItem -> fileItem.getFieldName() + " as " + fileItem.getFieldName()).collect(Collectors.toList());
+        List<String> fileItemCollect = fileItems.stream().map(fileItem -> {
+            //如果是地区名称字段 则需要特殊处理
+            if("distName".equalsIgnoreCase(fileItem.getFieldName())) {
+                return " case when gradeid = '村' then " +
+                        "concat((select max(distName) from dist where distid = left(" + tableName + ".distid,6) and years = " + years + "), distname) " +
+                        "else distName end " + " as " + fileItem.getFieldName();
+            }
+            return fileItem.getFieldName() + " as " + fileItem.getFieldName();
+        }).collect(Collectors.toList());
+
         fileItemCollect.add("id as id");
         if(!fileItemCollect.contains("balflag as balflag")){
             fileItemCollect.add("balflag as balflag");
@@ -106,6 +115,14 @@ public class BaseDataManagerImpl implements BaseDataManager {
         if(!fileItemCollect.contains("sumflag as sumflag")){
             fileItemCollect.add("sumflag as sumflag");
         }
+
+        //如果是表七或表八 需要查询ztid 后续拼接语句排序用到
+        if("rep905".equalsIgnoreCase(tableName) || "rep906".equalsIgnoreCase(tableName)) {
+            if(!fileItemCollect.contains("ztid as ztid")){
+                fileItemCollect.add("ztid as ztid");
+            }
+        }
+
         String filed = String.join(", ", fileItemCollect);
         StringBuffer sqlStringBuffer = new StringBuffer();
         sqlStringBuffer.append("select ").append(filed).append(" from ").append(fileList.getTableName());
@@ -227,7 +244,8 @@ public class BaseDataManagerImpl implements BaseDataManager {
                 sqlStringBufferOther.append("select ")
 //                        .append(String.join(", ", fileItemCollect2))
                         .append(" t1.* ")
-                        .append(" from ( select * ")
+                        .append(" from ( select ")
+                        .append(filed)
                         .append(" from ").append(fileList.getTableName()).append(sqlWhereStringBuffer).append(" ) as t1 ")
                         .append(" left join ( select * from distEx where 1 = 1 and distid like '")
                         .append("0".equalsIgnoreCase(distNo) ? "%" : distNo + "%")
@@ -338,7 +356,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
         if("rep905".equalsIgnoreCase(fileList.getTableName()) || "rep906".equalsIgnoreCase(fileList.getTableName())){
             StringBuffer sqlStringBufferOther = new StringBuffer();
-            sqlStringBufferOther.append("select t1.* from ( select * ")
+            sqlStringBufferOther.append("select t1.* from ( select ").append(filed)
                     .append(" from ").append(fileList.getTableName()).append(sqlWhereStringBuffer).append(" ) as t1 ")
                     .append(" left join ( select * from distEx where 1 = 1 and distid like '")
                     .append("0".equalsIgnoreCase(distNo) ? "%" : distNo + "%")

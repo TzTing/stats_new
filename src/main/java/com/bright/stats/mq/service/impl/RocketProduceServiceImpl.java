@@ -1,15 +1,28 @@
 package com.bright.stats.mq.service.impl;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
 import com.bright.stats.constant.RocketConstant;
 import com.bright.stats.manager.DistManager;
+import com.bright.stats.mq.service.AsynchronousTaskService;
 import com.bright.stats.mq.service.RocketProduceService;
+import com.bright.stats.pojo.dto.CheckDTO;
+import com.bright.stats.pojo.dto.ReportDTO;
+import com.bright.stats.pojo.dto.SummaryDTO;
 import com.bright.stats.pojo.po.primary.MqMessage;
+import com.bright.stats.pojo.vo.CheckVO;
+import com.bright.stats.pojo.vo.InteractiveVO;
+import com.bright.stats.pojo.vo.SummaryVO;
 import com.bright.stats.repository.primary.MqMessageRepository;
 import com.bright.stats.util.DateUtil;
 import lombok.AllArgsConstructor;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -22,9 +35,10 @@ import java.util.Objects;
 public class RocketProduceServiceImpl implements RocketProduceService {
 
 
-    private final RocketMQTemplate rocketMQTemplate;
+//    private final RocketMQTemplate rocketMQTemplate;
     private final MqMessageRepository mqMessageRepository;
     private final DistManager distManager;
+    private final AsynchronousTaskService asynchronousTaskService;
 
 
     @Override
@@ -59,6 +73,9 @@ public class RocketProduceServiceImpl implements RocketProduceService {
         if(Objects.isNull(result)){
             throw new RuntimeException("消息保存异常！");
         }
-        rocketMQTemplate.convertAndSend(RocketConstant.TOPIC_CONSUMER, result);
+//        rocketMQTemplate.convertAndSend(RocketConstant.TOPIC_CONSUMER, result);
+
+        //异步处理 不使用消息队列 用异步任务处理
+        asynchronousTaskService.handTopicTask(RocketConstant.TOPIC_CONSUMER, result);
     }
 }

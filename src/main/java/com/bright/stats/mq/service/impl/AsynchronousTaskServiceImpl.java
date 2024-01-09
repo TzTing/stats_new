@@ -3,6 +3,7 @@ package com.bright.stats.mq.service.impl;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.bright.stats.constant.RocketConstant;
+import com.bright.stats.mq.service.AsynchronousTaskService;
 import com.bright.stats.pojo.dto.CheckDTO;
 import com.bright.stats.pojo.dto.ReportDTO;
 import com.bright.stats.pojo.dto.SummaryDTO;
@@ -13,31 +14,31 @@ import com.bright.stats.pojo.vo.SummaryVO;
 import com.bright.stats.repository.primary.MqMessageRepository;
 import com.bright.stats.service.BaseDataService;
 import com.bright.stats.util.DateUtil;
-import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
-import org.apache.rocketmq.spring.core.RocketMQListener;
+import lombok.AllArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import javax.annotation.Resource;
+import java.util.*;
+import java.util.concurrent.*;
+
+import static com.bright.common.config.BizJobConfiguration.BIZ_THREAD_POOL_TASK_EXECUTOR;
+
 
 /**
- * 队列消费者
- *
- * <p>RocketMQMessageListener(topic = RocketConstant.TOPIC_CONSUMER, consumerGroup = RocketConstant.TOPIC_CONSUMER + "_group"):
- * <p>监听的主题为：RocketConstant.TOPIC_CONSUMER
- * <p>监听的队列为：RocketConstant.TOPIC_CONSUMER + "_group"
+ * <p>Project: stats - AsynchronousTaskServiceImpl </p>
  *
  * @author: Tz
- * @Date: 2022/10/17 10:53
+ * @Date: 2023/12/22 15:40
+ * @Description: 异步处理任务的service 实现
+ * @version: 1.0.0
  */
-//@Component
-//@RocketMQMessageListener(topic = RocketConstant.TOPIC_CONSUMER, consumerGroup = RocketConstant.TOPIC_CONSUMER + "_group")
-public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
+@Service
+@AllArgsConstructor
+public class AsynchronousTaskServiceImpl implements AsynchronousTaskService {
 
     @Autowired
     private BaseDataService baseDataService;
@@ -45,14 +46,47 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
     @Autowired
     private MqMessageRepository mqMessageRepository;
 
+    @Resource(name = BIZ_THREAD_POOL_TASK_EXECUTOR)
+    private ThreadPoolExecutor threadPoolExecutor;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AsynchronousTaskServiceImpl.class);
+
     /**
      * 原子操作
      */
     private static ConcurrentHashMap concurrentHashMap = new ConcurrentHashMap();
 
 
+    /**
+     * 处理主题任务
+     *
+     * @param topicName 主题名称
+     * @param mqMessage 处理任务内容
+     */
     @Override
-    public void onMessage(MqMessage mqMessage) {
+    public void handTopicTask(String topicName, MqMessage mqMessage) {
+
+        //指定线程池异步执行任务
+        CompletableFuture<Void> exceptionally = CompletableFuture.runAsync(() -> {
+            bizTask(topicName, mqMessage);
+        }, threadPoolExecutor).exceptionally((throwable) -> {
+            //如果执行失败
+            //将状态更新成失败 即不在运行的状态
+            mqMessage.setConsumerFlag(RocketConstant.CONSUMER_FLAG_BUSINESS_FAIL);
+            mqMessageRepository.save(mqMessage);
+            LOGGER.error(throwable.getMessage());
+            return null;
+        });
+
+    }
+
+
+    /**
+     * 处理业务任务
+     * @param topicName 主题名称
+     * @param mqMessage 主题消息
+     */
+    public void bizTask(String topicName, MqMessage mqMessage){
 
         //消费稽核、汇总、上报 需要控制地区 当前地区只能有一个任务在执行, 比如我执行地区0103 则 010301地区会等待， 0104 则可以同时执行
         //1、校验任务是否取消
@@ -63,14 +97,13 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
 
         Long startTime = System.currentTimeMillis();
 
-        Map<String, Object> data = (Map<String, Object>) mqMessage.getData();
+        HashMap<String, Object> data = JSON.parseObject(JSON.toJSONString(mqMessage.getData()), HashMap.class);
+
+
         mqMessage.setContentType(1);
 
         //锁对象
         Object object = null;
-
-
-//        synchronized (this) {
 
 
         //1、校验任务是否取消
@@ -104,45 +137,7 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
             if(object == null){
                 object = new Object();
             }
-
-            /*MqMessagesDTO mqMessagesDTO = new MqMessagesDTO();
-            mqMessagesDTO.setTopicType(mqMessage.getTopicType());
-            mqMessagesDTO.setYears(mqMessage.getYears());
-            mqMessagesDTO.setMonths(mqMessage.getMonths());
-            mqMessagesDTO.setDistNo(mqMessage.getDistNo());
-            mqMessagesDTO.setTypeCode(mqMessage.getTypeCode());
-
-            //查询所有正在执行的操作
-            List<MqMessage> mqMessageList = mqMessageRepository.findMqMessage(mqMessage.getYears()
-                    , mqMessage.getMonths()
-                    , mqMessage.getTypeCode());
-
-            //如果当前操作的地区上级或下级存在操作 则停止操作
-            mqMessageList = mqMessageList.stream().filter(e -> {
-                if(e.getDistNo().startsWith(mqMessage.getDistNo())
-                        || mqMessage.getDistNo().startsWith(e.getDistNo())){
-                    return true;
-                } else {
-                    return false;
-                }
-            }).collect(Collectors.toList());
-
-            //这里大于1是因为当前消息处理的时候就是一条记录
-            if(mqMessageList.size() > 1){
-                //如果有相同地区的在执行
-                concurrentHashMap.put(mqMessage.getDistNo(), object);
-                resMqMessage.setContent("任务被强制取消，存在冲突的任务！");
-                resMqMessage.setConsumerFlag(-3);
-                resMqMessage.setRunFlag(false);
-                resMqMessage.setUpdatedBy(resMqMessage.getUsername());
-                resMqMessage.setUpdatedTime(DateUtil.getCurrDate());
-                mqMessageRepository.save(resMqMessage);
-            } else {
-
-            }*/
-
         }
-
 
 
         //进入消费 表示该消息已经开始消费了
@@ -265,7 +260,8 @@ public class RocketConsumerServiceImpl implements RocketMQListener<MqMessage> {
         mqMessage.setUpdatedBy(mqMessage.getUsername());
         mqMessage.setUpdatedTime(DateUtil.getCurrDate());
         mqMessageRepository.save(mqMessage);
-
     }
+
+
 
 }

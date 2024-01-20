@@ -46,6 +46,7 @@ import javax.persistence.*;
 import java.io.File;
 import java.math.BigDecimal;
 import java.sql.*;
+import java.text.DecimalFormat;
 import java.util.Date;
 import java.util.*;
 import java.util.function.Function;
@@ -1267,8 +1268,12 @@ public class BaseDataManagerImpl implements BaseDataManager {
                                             Date d = cell.getDateCellValue();
                                             cellValue = DateUtil.getAllDate(d);
                                         } else {
-                                            //cellValue=cell.getCellFormula(); 
-                                            cellValue = Double.toString(cell.getNumericCellValue());
+                                            //cellValue=cell.getCellFormula();
+//                                            cellValue = Double.toString(cell.getNumericCellValue());
+                                            //如果是CELL_TYPE_NUMERIC类型 根据配置的disFormat的格式进行转换
+                                            DecimalFormat decimalFormat = new DecimalFormat(fileItem.getDisFormat().replace(",", ""));
+                                            cellValue = decimalFormat.format(cell.getNumericCellValue());
+//                                            cellValue = String.format("%.10f", cellValue);;
                                         }
 
                                         break;

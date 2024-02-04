@@ -980,7 +980,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
         //不为空则需要判断当前导入的模板 是否为该用户所属的模板
         if(StringUtils.isNotBlank(belongDistNo)){
             if(!user.getTjDistNo().startsWith(belongDistNo)
-                    || !belongDistNo.startsWith(user.getTjDistNo())){
+                    && !belongDistNo.startsWith(user.getTjDistNo())){
                 throw new RuntimeException("用户:" + user.getUsername() + " 不能操作该模板!");
             }
         }

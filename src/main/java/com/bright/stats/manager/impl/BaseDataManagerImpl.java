@@ -1552,7 +1552,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
                                                     .append("',");
 
                                             //将导入的item的value对应添加
-                                            updateItemValue.put(fileItem.getFieldName().toUpperCase(), cellValue);
+                                            updateItemValue.put(fileItem.getFieldName().toUpperCase(), "'" + cellValue + "'");
                                         } else {
                                             headSql.append(fileItem.getFieldName().toUpperCase())
                                                     .append("=")

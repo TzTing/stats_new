@@ -1600,8 +1600,10 @@ public class BaseDataManagerImpl implements BaseDataManager {
                             for (String s : updateItemValue.keySet()) {
                                 updateExpress = updateExpress.replace("[" + s + "]", updateItemValue.get(s));
                             }
-                            updateItemValue.put(fieldName.toUpperCase(), String.valueOf(CalculationUtils.calculation(updateExpress)));
-
+                            //如果未上传该字段的值 则不更新
+                            if (!updateExpress.equalsIgnoreCase(ruleInner.getExpress())) {
+                                updateItemValue.put(fieldName.toUpperCase(), String.valueOf(CalculationUtils.calculation(updateExpress)));
+                            }
                         }
                     }
 

@@ -2,6 +2,7 @@ package com.bright.stats.mq.service.impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.bright.common.config.BizThreadPoolExt;
 import com.bright.stats.constant.RocketConstant;
 import com.bright.stats.mq.service.AsynchronousTaskService;
 import com.bright.stats.pojo.dto.CheckDTO;
@@ -14,18 +15,18 @@ import com.bright.stats.pojo.vo.SummaryVO;
 import com.bright.stats.repository.primary.MqMessageRepository;
 import com.bright.stats.service.BaseDataService;
 import com.bright.stats.util.DateUtil;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
-import javax.annotation.Resource;
-import java.util.*;
-import java.util.concurrent.*;
-
-import static com.bright.common.config.BizJobConfiguration.BIZ_THREAD_POOL_TASK_EXECUTOR;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -37,17 +38,17 @@ import static com.bright.common.config.BizJobConfiguration.BIZ_THREAD_POOL_TASK_
  * @version: 1.0.0
  */
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class AsynchronousTaskServiceImpl implements AsynchronousTaskService {
 
-    @Autowired
-    private BaseDataService baseDataService;
+//    @Autowired
+    private final BaseDataService baseDataService;
 
-    @Autowired
-    private MqMessageRepository mqMessageRepository;
+//    @Autowired
+    private final MqMessageRepository mqMessageRepository;
 
-    @Resource(name = BIZ_THREAD_POOL_TASK_EXECUTOR)
-    private ThreadPoolExecutor threadPoolExecutor;
+//    @Resource(name = BIZ_THREAD_POOL_TASK_EXECUTOR)
+    private final BizThreadPoolExt bizPool;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AsynchronousTaskServiceImpl.class);
 
@@ -68,8 +69,9 @@ public class AsynchronousTaskServiceImpl implements AsynchronousTaskService {
 
         //指定线程池异步执行任务
         CompletableFuture<Void> exceptionally = CompletableFuture.runAsync(() -> {
+            Thread.currentThread().setName(mqMessage.getTopicName() + "_" + mqMessage.getKeyword());
             bizTask(topicName, mqMessage);
-        }, threadPoolExecutor).exceptionally((throwable) -> {
+        }, bizPool).exceptionally((throwable) -> {
             //如果执行失败
             //将状态更新成失败 即不在运行的状态
             mqMessage.setConsumerFlag(RocketConstant.CONSUMER_FLAG_BUSINESS_FAIL);
@@ -168,6 +170,7 @@ public class AsynchronousTaskServiceImpl implements AsynchronousTaskService {
                     throw new RuntimeException("更新是否消费状态异常!");
                 }
 
+                LOGGER.info("开始执行异步任务：【{}】。。。", mqMessage.getTopicName());
                 if (mqMessage.getTopicType().equals(RocketConstant.TOPIC_CHECK)) {
 
                     CheckDTO checkDTO = JSONObject.parseObject(JSON.toJSONString(data), CheckDTO.class);
@@ -246,8 +249,15 @@ public class AsynchronousTaskServiceImpl implements AsynchronousTaskService {
                 } else {
 
                 }
+
+                LOGGER.info("执行异步任务：【{}】 完成！ keyword：【{}】， 状态：【{}】，结果信息：【{}】"
+                        ,mqMessage.getKeyword(), mqMessage.getTopicName(), mqMessage.getConsumerFlag(), mqMessage.getContent());
             } catch (Exception e){
+                mqMessage.setContent("系统执行错误: " + e.getMessage());
+                mqMessage.setConsumerFlag(RocketConstant.CONSUMER_FLAG_SYSTEM_FAIL);
                 e.getStackTrace();
+                LOGGER.info("执行异步任务：【{}】 错误！ keyword：【{}】， 状态：【{}】，错误信息：【{}】"
+                        ,mqMessage.getKeyword(), mqMessage.getTopicName(), mqMessage.getConsumerFlag(), e.getMessage());
             } finally {
                 //4、释放当前执行地区持有的锁
                 concurrentHashMap.remove(mqMessage.getDistNo());

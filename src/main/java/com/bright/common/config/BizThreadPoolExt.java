@@ -1,8 +1,11 @@
 package com.bright.common.config;
 
+import com.sun.management.OperatingSystemMXBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.*;
@@ -20,6 +23,16 @@ import java.util.concurrent.atomic.AtomicLong;
 public class BizThreadPoolExt extends ThreadPoolExecutor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BizThreadPoolExt.class);
+
+    /**
+     * Java虚拟机的线程系统的管理接口
+     */
+    private ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+
+    /**
+     * 运行Java虚拟机的操作系统的管理接口
+     */
+    private OperatingSystemMXBean osBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
 
     /**
      * 默认拒绝策略
@@ -124,6 +137,19 @@ public class BizThreadPoolExt extends ThreadPoolExecutor {
         this.minCostTime = 0L;
     }
 
+    /**
+     * 根据线程id 获取线程执行占用总cpu的百分比
+     * @param threadId 线程id
+     * @return         占用总cpu的百分比
+     */
+    private double getThreadCpuUsage(long threadId) {
+        long threadCpuTime = threadMXBean.getThreadCpuTime(threadId);
+        long systemCpuTime = osBean.getProcessCpuTime();
+
+        double cpuUsage = ((double) threadCpuTime / (double) systemCpuTime) * 100;
+        cpuUsage = Math.round(cpuUsage * 100.0) / 100.0;
+        return cpuUsage;
+    }
 
     /**
      * 线程池延迟关闭时（等待线程池里的任务都执行完毕），统计线程池情况
@@ -161,6 +187,7 @@ public class BizThreadPoolExt extends ThreadPoolExecutor {
     @Override
     protected void afterExecute(Runnable r, Throwable t) {
         long costTime = System.currentTimeMillis() - startTimeThreadLocal.get();
+        String threadName = Thread.currentThread().getName();
         startTimeThreadLocal.remove();
         maxCostTime = maxCostTime > costTime ? maxCostTime : costTime;
         if (getCompletedTaskCount() == 0) {
@@ -169,11 +196,12 @@ public class BizThreadPoolExt extends ThreadPoolExecutor {
         minCostTime = minCostTime < costTime ? minCostTime : costTime;
         totalCostTime.addAndGet(costTime);
         LOGGER.info("{}-pool-monitor: " +
-                        "任务耗时: {} ms, 初始线程数: {}, 核心线程数: {}, 执行的任务数量: {}, " +
+                        "任务名称: {}, 任务耗时: {} ms, 占用cpu时间: {} ms, 占总cpu: {} %, 初始线程数: {}, 核心线程数: {}, 执行的任务数量: {}, " +
                         "已完成任务数量: {}, 任务总数: {}, 队列里缓存的任务数量: {}, 池中存在的最大线程数: {}, " +
                         "最大允许的线程数: {},  线程空闲时间: {}, 线程池是否关闭: {}, 线程池是否终止: {}",
-                this.poolName,
-                costTime, this.getPoolSize(), this.getCorePoolSize(), this.getActiveCount(),
+                this.poolName, threadName,
+                costTime, threadMXBean.getThreadCpuTime(Thread.currentThread().getId()) / (1000 * 1000), getThreadCpuUsage(Thread.currentThread().getId()),
+                this.getPoolSize(), this.getCorePoolSize(), this.getActiveCount(),
                 this.getCompletedTaskCount(), this.getTaskCount(), this.getQueue().size(), this.getLargestPoolSize(),
                 this.getMaximumPoolSize(), this.getKeepAliveTime(TimeUnit.MILLISECONDS), this.isShutdown(), this.isTerminated());
     }
@@ -201,6 +229,10 @@ public class BizThreadPoolExt extends ThreadPoolExecutor {
             return 0;
         }
         return totalCostTime.get()/getCompletedTaskCount();
+    }
+
+    public String getPoolName() {
+        return poolName;
     }
 
     /**

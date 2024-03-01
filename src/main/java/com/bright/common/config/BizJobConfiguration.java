@@ -2,6 +2,7 @@ package com.bright.common.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import java.util.concurrent.*;
 
@@ -13,13 +14,14 @@ import java.util.concurrent.*;
  * @Description: 业务任务的线程池
  * @version: 1.0.0
  */
-@Configuration(proxyBeanMethods = false)
+//@Configuration(proxyBeanMethods = false)
 public class BizJobConfiguration {
 
     public static final String BIZ_THREAD_POOL_TASK_EXECUTOR = "BIZ_THREAD_POOL_TASK_EXECUTOR";
 
+    @Primary
     @Bean(BIZ_THREAD_POOL_TASK_EXECUTOR)
-    public ThreadPoolExecutor bizThreadPoolTaskExecutor() {
+    public BizThreadPoolExt bizThreadPoolTaskExecutor() {
 
         BizThreadPoolExt executor = new BizThreadPoolExt(32
                 , 64

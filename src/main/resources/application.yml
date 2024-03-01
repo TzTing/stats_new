@@ -7,9 +7,65 @@ spring:
     active: dm
 
 
-rocketmq:
-  name-server: 192.168.0.16:9876
+#rocketmq:
 #  name-server: 192.168.0.101:9876
-  producer:
-    group: my-group
+##  name-server: 192.168.0.101:9876
+#  producer:
+#    group: my-group
+#    access-key: bjrocketmq
+#    secret-key: gzbj38259201@
+#    sendMessageTimeout: 300000
+#  consumer:
+#    access-key: bjrocketmq
+#    secret-key: gzbj38259201@
+#    pull-timeout: 1000000
 
+#springboot 性能监控配置
+#management:
+#  endpoints:
+#    web:
+#      exposure:
+#        include: "*"
+#        exclude: shutdown
+#      show-details: always
+
+
+#info:
+#  app:
+#    name:
+#      spring-boot-actuator
+#    version: 1.0.0
+#  java:
+#    source: 1.8
+#    target: 1.8
+
+#注： 这里也只是比较单一的动态线程池。
+dynamic:
+  thread:
+    pool:
+      pool1:
+        poolName: 业务线程
+        beanName: bizPool
+        corePoolSize: 30
+        maximumPoolSize: 64
+        keepAliveTime: 60
+        blockQueueCapacity: 100
+        #任务拒绝策略
+        #1: AbortPolicy 默认的处理策略，会直接抛出RejectedExecutionException异常，阻止系统继续接受新的任务
+        #2: CallerRunsPolicy 当任务被拒绝时，会在调用者的线程中执行该任务。
+        #3: DiscardPolicy 当任务被拒绝时，会默默地丢弃该任务。
+        #4: DiscardOldestPolicy 当任务被拒绝时，会丢弃最老的一个任务，然后尝试重新提交被拒绝的任务。
+        rejectedType: 1
+      pool2:
+        poolName: 定时任务线程
+        beanName: jobPool
+        corePoolSize: 15
+        maximumPoolSize: 32
+        keepAliveTime: 30
+        blockQueueCapacity: 50
+        #任务拒绝策略
+        #1: AbortPolicy 默认的处理策略，会直接抛出RejectedExecutionException异常，阻止系统继续接受新的任务
+        #2: CallerRunsPolicy 当任务被拒绝时，会在调用者的线程中执行该任务。
+        #3: DiscardPolicy 当任务被拒绝时，会默默地丢弃该任务。
+        #4: DiscardOldestPolicy 当任务被拒绝时，会丢弃最老的一个任务，然后尝试重新提交被拒绝的任务。
+        rejectedType: 1

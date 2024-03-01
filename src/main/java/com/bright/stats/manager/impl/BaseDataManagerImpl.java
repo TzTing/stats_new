@@ -99,9 +99,9 @@ public class BaseDataManagerImpl implements BaseDataManager {
         List<String> fileItemCollect = fileItems.stream().map(fileItem -> {
             //如果是地区名称字段 则需要特殊处理
             if("distName".equalsIgnoreCase(fileItem.getFieldName())) {
-                return " case when gradeid = '村' then " +
-                        "concat((select max(distName) from dist where distid = left(" + tableName + ".distid,6) and years = " + years + "), distname) " +
-                        "else distName end " + " as " + fileItem.getFieldName();
+//                return " case when gradeid = '村' then " +
+//                        "concat((select max(distName) from dist where distid = left(" + tableName + ".distid,6) and years = " + years + "), distname) " +
+//                        "else distName end " + " as " + fileItem.getFieldName();
             }
             return fileItem.getFieldName() + " as " + fileItem.getFieldName();
         }).collect(Collectors.toList());
@@ -257,7 +257,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
                         .append(" and years = ")
                         .append(years)
                         .append(") as t2 on t1.ztid = t2.ztid order by ")
-                        .append("isnull(t2.parent_id, t2.ztid), t2.ztTypeId");
+                        .append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
 
 
                 if(CollectionUtils.isEmpty(sorts)) {
@@ -368,7 +368,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
                     .append(" and years = ")
                     .append(years)
                     .append(") as t2 on t1.ztid = t2.ztid order by ")
-                    .append("isnull(t2.parent_id, t2.ztid), t2.ztTypeId");
+                    .append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
 
 
             if(CollectionUtils.isEmpty(sorts)) {

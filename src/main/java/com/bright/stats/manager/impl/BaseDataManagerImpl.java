@@ -256,13 +256,13 @@ public class BaseDataManagerImpl implements BaseDataManager {
                         .append("'")
                         .append(" and years = ")
                         .append(years)
-                        .append(") as t2 on t1.ztid = t2.ztid order by ")
-                        .append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
+                        .append(") as t2 on t1.ztid = t2.ztid order by ");
+//                        .append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
 
 
                 if(CollectionUtils.isEmpty(sorts)) {
                     String sqlOrder = fileList.getOrderStr();
-
+                    sqlStringBufferOther.append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
                     if(StringUtils.isEmpty(StringUtils.trimToEmpty(sqlOrder))) {
                         sqlOrder = " ,t1.years, t1.distId" + (fileList.getFileItemLink() != null ? ",t1.lxid" : "");
                         sqlOrder += ", t1.distid";
@@ -271,7 +271,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
                         sqlStringBufferOther.append(sqlOrder);
                     }
                 } else {
-                    sqlStringBufferOther.append(",");
+//                    sqlStringBufferOther.append(",");
                     for (int i = 0; i < sorts.size(); i++) {
                         if (sorts.get(i).indexOf(",") == -1) {
                             if (i == sorts.size() - 1) {
@@ -290,6 +290,8 @@ public class BaseDataManagerImpl implements BaseDataManager {
                             }
                         }
                     }
+                    sqlStringBufferOther.append(",");
+                    sqlStringBufferOther.append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
 
                 }
 
@@ -367,12 +369,14 @@ public class BaseDataManagerImpl implements BaseDataManager {
                     .append("'")
                     .append(" and years = ")
                     .append(years)
-                    .append(") as t2 on t1.ztid = t2.ztid order by ")
-                    .append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
+                    .append(") as t2 on t1.ztid = t2.ztid order by ");
+//                    .append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
 
 
             if(CollectionUtils.isEmpty(sorts)) {
                 String sqlOrder = fileList.getOrderStr();
+
+                sqlStringBufferOther.append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
 
                 if(StringUtils.isEmpty(StringUtils.trimToEmpty(sqlOrder))) {
                     sqlOrder = " ,t1.years, t1.distId" + (fileList.getFileItemLink() != null ? ",t1.lxid" : "");
@@ -380,7 +384,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
                     sqlStringBufferOther.append(sqlOrder);
                 }
             } else {
-                sqlStringBufferOther.append(",");
+//                sqlStringBufferOther.append(",");
                 for (int i = 0; i < sorts.size(); i++) {
                     if (sorts.get(i).indexOf(",") == -1) {
                         if (i == sorts.size() - 1) {
@@ -399,6 +403,9 @@ public class BaseDataManagerImpl implements BaseDataManager {
                         }
                     }
                 }
+
+                sqlStringBufferOther.append(",");
+                sqlStringBufferOther.append("isnull(t2.parent_id, t1.distid), t2.ztTypeId");
 
             }
 

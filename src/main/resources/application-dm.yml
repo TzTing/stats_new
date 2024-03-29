@@ -95,6 +95,8 @@ cas:
     host: http://192.168.0.16:8080/cas
     login_url: http://192.168.0.16:8080/cas/login
     logout_url: http://192.168.0.16:8080/cas/logout
+    #内网登陆配置
+    inner_host: http://192.168.0.44:8081/cas
 #cas:
 #  server:
 #    host: http://192.168.0.101:8024/cas

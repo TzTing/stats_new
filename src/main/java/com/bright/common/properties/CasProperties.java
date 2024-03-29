@@ -35,4 +35,7 @@ public class CasProperties {
 
     @Value("${cas.server.logout_url}")
     private String casServerLogoutUrl;
+
+    @Value("${cas.server.inner_host}")
+    private String casServerInnerHost;
 }

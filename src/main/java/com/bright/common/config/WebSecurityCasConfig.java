@@ -143,6 +143,8 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
     @Bean
     public Cas20ProxyTicketValidatorExt cas20ServiceTicketValidator() {
         Cas20ProxyTicketValidatorExt cas20ServiceTicketValidator = new Cas20ProxyTicketValidatorExt(casProperties.getCasServerUrl());
+        //内网登陆
+//        Cas20ProxyTicketValidatorExt cas20ServiceTicketValidator = new Cas20ProxyTicketValidatorExt(casProperties.getCasServerInnerHost());
         cas20ServiceTicketValidator.setEncoding("UTF-8");
         return cas20ServiceTicketValidator;
     }

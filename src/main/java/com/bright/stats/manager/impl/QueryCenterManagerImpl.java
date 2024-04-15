@@ -25,10 +25,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.beans.IntrospectionException;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -166,20 +163,33 @@ public class QueryCenterManagerImpl implements QueryCenterManager {
         String userDistNo = user.getTjDistNo();
 
         List<FileList> fileLists = fileListManager.listFileListsOnly(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_ANALYSIS, years, months);
-        List<FileList> collects = fileLists.stream().filter(fileList -> {
-            if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
-                    (fileList.getBelongDistNo().startsWith(userDistNo) || userDistNo.startsWith(fileList.getBelongDistNo()))) {
-                return true;
-            } else {
-                return false;
-            }
-        }).collect(Collectors.toList());
+
+        Set<FileList> collects = new LinkedHashSet<>();
+        for (String tempUserDistNo : userDistNo.split(",")) {
+            collects.addAll(fileLists.stream().filter(fileList -> {
+                if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
+                        (fileList.getBelongDistNo().startsWith(tempUserDistNo) || tempUserDistNo.startsWith(fileList.getBelongDistNo()))) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }).collect(Collectors.toList()));
+        }
+
+//        List<FileList> collects = fileLists.stream().filter(fileList -> {
+//            if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
+//                    (fileList.getBelongDistNo().startsWith(userDistNo) || userDistNo.startsWith(fileList.getBelongDistNo()))) {
+//                return true;
+//            } else {
+//                return false;
+//            }
+//        }).collect(Collectors.toList());
 
         if(CollectionUtils.isEmpty(collects)){
             throw new RuntimeException("未配置基础表！");
         }
 
-        return collects;
+        return new ArrayList<>(collects);
     }
 
     private String jxExpress(String str, Integer years, String distNo, String paramSql) {

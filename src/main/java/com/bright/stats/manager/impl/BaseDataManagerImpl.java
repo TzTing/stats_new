@@ -1941,6 +1941,24 @@ public class BaseDataManagerImpl implements BaseDataManager {
             param.put("udistid", (null == user.getDists() || user.getDists().size() == 0) ? user.getDistNo() : user.getDists().get(0).getDistId());
             param.put("distType", fileList.getRoleGrade());
             param.put("tabletype", user.getTableType().getTableType());
+
+
+//            //TODO 多地区 待处理
+//            //判断当前操作的地区是否是userDist地区或是其所属地区
+            boolean accordWith = false;
+            for (String tempDistNo : user.getTjDistNo().split(",")) {
+                //如果当前操作的地区是userDist的地区或下属地区 则符合条件
+                if (tempDistNo.startsWith(distNo)
+                        || distNo.startsWith(tempDistNo)) {
+                    accordWith = true;
+                    param.put("udistid", tempDistNo);
+                    break;
+                }
+            }
+            if (!accordWith) {
+                throw new RuntimeException("当前操作的地区没有权限！");
+            }
+
             Integer couts = this.isexstsDistInlimit(param);
             if (couts > 0) {
                 rvalue = (fileList.getFileItemLinkExExsMap() != null && fileList.getFileItemLinkExs().size() > 0) ? (returnLxNames.size() > 0) : !this.getExistData(fileList, years, months, distNo, null);
@@ -2007,21 +2025,35 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
         List<FileList> fileLists = fileListManager.listFileListsOnly(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months);
 
-        List<FileList> collects = fileLists.stream().filter(fileList -> {
-            if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
-                    (fileList.getBelongDistNo().startsWith(userDistNo) || userDistNo.startsWith(fileList.getBelongDistNo()))) {
-                return true;
-            } else {
-                return false;
-            }
-        }).collect(Collectors.toList());
+//        List<FileList> collects = new ArrayList<>();
+        Set<FileList> collects = new LinkedHashSet<>();
+
+        for (String tempUserDistNo : userDistNo.split(",")) {
+            collects.addAll(fileLists.stream().filter(fileList -> {
+                if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
+                        (fileList.getBelongDistNo().startsWith(tempUserDistNo) || tempUserDistNo.startsWith(fileList.getBelongDistNo()))) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }).collect(Collectors.toList()));
+        }
+
+//        List<FileList> collects = fileLists.stream().filter(fileList -> {
+//            if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
+//                    (fileList.getBelongDistNo().startsWith(userDistNo) || userDistNo.startsWith(fileList.getBelongDistNo()))) {
+//                return true;
+//            } else {
+//                return false;
+//            }
+//        }).collect(Collectors.toList());
 
 
         if(CollectionUtils.isEmpty(collects)){
             throw new RuntimeException("未配置基础表！");
         }
 
-        return collects;
+        return new ArrayList<>(collects);
     }
 
     @Override

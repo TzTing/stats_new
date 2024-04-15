@@ -56,6 +56,22 @@ public class UploadBaseManagerImpl implements UploadBaseManager {
             distLen = allGrade.get(distIndex);
         }
 
+        //判断当前操作的地区是否是userDist地区或是其所属地区
+        Boolean accordWith = false;
+        for (String tempDistNo : userDistNo.split(",")) {
+            //如果当前操作的地区是userDist的地区或下属地区 则符合条件
+            if (tempDistNo.startsWith(distNo)
+                    || distNo.startsWith(tempDistNo)) {
+                accordWith = true;
+                userDistNo = tempDistNo;
+                break;
+            }
+        }
+
+        if (!accordWith) {
+            throw new RuntimeException("当前操作的地区没有权限！");
+        }
+
         Pageable pageable = PageQueryUtil.toPageable(pageNumber, pageSize, sorts);
 //        Page<UploadBase> page = uploadBaseRepository.findUploadBase(years, typeCode, distNo, userDistNo, pageable);
 

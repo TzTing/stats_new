@@ -9,9 +9,7 @@ import com.bright.stats.util.DataConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -38,14 +36,27 @@ public class DistServiceImpl implements DistService {
         Set<Integer> distGradesSet = distManager.listDistGrades(years);
         List<Integer> distGIntegers = distGradesSet.stream().collect(Collectors.toList());
 
-        //暂时不需要判断 以后地区级别都是根据年份查询
-        //DataConstants.distGrades 废弃
-        /*if(distGrades.length != distGIntegers.size()){
-            throw new RuntimeException("获取地区长度集合异常！");
-        }*/
+        //如果地区号带有‘，’ 表示用户持有多个地区的权限
+        Set<DistVO> distVOS = new LinkedHashSet<>();
+        for (String tempDistNo : distNo.split(",")) {
+
+            Integer distNoLength = getDistNoLength(distGIntegers, tempDistNo);
+            distVOS.addAll(distManager.listDistForList(years, userDistNo, tempDistNo, distNoLength));
+        }
+
+        return new ArrayList<>(distVOS);
+    }
+
+
+    /**
+     *
+     * @param distGIntegers 地区所有等级
+     * @param distNo 需要获取等级的地区号
+     * @return 返回地区等级
+     */
+    public Integer getDistNoLength(List<Integer> distGIntegers, String distNo){
 
         int i = distGIntegers.indexOf(distNo.length());
-
         Integer distNoLength = 0;
         if (i + 1 <= distGIntegers.size()) {
             if(i + 1 == distGIntegers.size()){
@@ -56,7 +67,7 @@ public class DistServiceImpl implements DistService {
         } else {
             throw new RuntimeException("获取地区长度集合异常！");
         }
-        List<DistVO> distVOS = distManager.listDistForList(years, userDistNo, distNo, distNoLength);
-        return distVOS;
+
+        return distNoLength;
     }
 }

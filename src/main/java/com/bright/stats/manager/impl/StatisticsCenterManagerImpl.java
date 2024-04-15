@@ -54,21 +54,33 @@ public class StatisticsCenterManagerImpl implements StatisticsCenterManager {
 
         List<FileList> fileLists = fileListManager.listFileListsOnly(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, years, months);
 
-        List<FileList> collects = fileLists.stream().filter(fileList -> {
-            if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
-                    (fileList.getBelongDistNo().startsWith(userDistNo) || userDistNo.startsWith(fileList.getBelongDistNo()))) {
-                return true;
-            } else {
-                return false;
-            }
-        }).collect(Collectors.toList());
+        Set<FileList> collects = new LinkedHashSet<>();
+        for (String tempUserDistNo : userDistNo.split(",")) {
+            collects.addAll(fileLists.stream().filter(fileList -> {
+                if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
+                        (fileList.getBelongDistNo().startsWith(tempUserDistNo) || tempUserDistNo.startsWith(fileList.getBelongDistNo()))) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }).collect(Collectors.toList()));
+        }
+
+//        List<FileList> collects = fileLists.stream().filter(fileList -> {
+//            if (org.apache.commons.lang3.StringUtils.isBlank(fileList.getBelongDistNo()) ||
+//                    (fileList.getBelongDistNo().startsWith(userDistNo) || userDistNo.startsWith(fileList.getBelongDistNo()))) {
+//                return true;
+//            } else {
+//                return false;
+//            }
+//        }).collect(Collectors.toList());
 
 
         if(CollectionUtils.isEmpty(collects)){
             throw new RuntimeException("未配置基础表！");
         }
 
-        return collects;
+        return new ArrayList<>(collects);
     }
 
     /**

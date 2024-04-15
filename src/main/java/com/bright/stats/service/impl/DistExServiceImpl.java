@@ -107,6 +107,21 @@ public class DistExServiceImpl implements DistExService {
             throw new RuntimeException("获取地区长度集合异常！");
         }
 
+        //判断当前操作的地区是否是userDist地区或是其所属地区
+        Boolean accordWith = false;
+        for (String tempDistNo : userDistNo.split(",")) {
+            //如果当前操作的地区是userDist的地区或下属地区 则符合条件
+            if (tempDistNo.startsWith(distNo)
+                    || distNo.startsWith(tempDistNo)) {
+                accordWith = true;
+                userDistNo = tempDistNo;
+            }
+        }
+
+        if (!accordWith) {
+            throw new RuntimeException("当前操作的地区没有权限！");
+        }
+
         try {
             List<DistAdapterVO> distAdapterVOs = distManager.listAdapterDistForList(years, userDistNo, distNo, distNoLength);
             return distAdapterVOs;

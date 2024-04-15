@@ -183,13 +183,27 @@ public class NavigateServiceImpl implements NavigateService {
             criteriaQuery.orderBy(criteriaBuilder.desc(root.get("updatedTime")));
             return criteriaQuery.getRestriction();
         });
-        mqMessages = mqMessages.stream().filter(e -> {
-            if(e.getDistNo().startsWith(mqMessage.getDistNo()) || mqMessage.getDistNo().startsWith(e.getDistNo())){
-                return true;
-            }
-            return false;
-        }).collect(Collectors.toList());
-        return mqMessages;
+
+
+        //TODO 多地区处理
+        LinkedHashSet<MqMessage> messages = new LinkedHashSet<>();
+
+        for (String tempDistNo : mqMessage.getDistNo().split(",")) {
+            messages.addAll(mqMessages.stream().filter(e -> {
+                if(e.getDistNo().startsWith(tempDistNo) || tempDistNo.startsWith(e.getDistNo())){
+                    return true;
+                }
+                return false;
+            }).collect(Collectors.toList()));
+        }
+
+//        mqMessages = mqMessages.stream().filter(e -> {
+//            if(e.getDistNo().startsWith(mqMessage.getDistNo()) || mqMessage.getDistNo().startsWith(e.getDistNo())){
+//                return true;
+//            }
+//            return false;
+//        }).collect(Collectors.toList());
+        return messages.stream().collect(Collectors.toList());
     }
 
     /**

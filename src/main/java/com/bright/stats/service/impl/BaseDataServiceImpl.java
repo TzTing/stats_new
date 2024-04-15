@@ -38,6 +38,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -169,21 +171,53 @@ public class BaseDataServiceImpl implements BaseDataService {
             //查询当前地区的最大长度
             int maxDistLen = distManager.getCurrMaxDistNoLength(uploadBase.getDistNo(), uploadBase.getYears());
 
-            //如果当前地区和操作的地区一样 不在执行汇总
+            //如果当前地区和操作的地区一样 不进行校验
             if(maxDistLen != uploadBase.getDistNo().length()){
-                SummaryDTO summaryDTO = new SummaryDTO();
+//                SummaryDTO summaryDTO = new SummaryDTO();
+//
+//                summaryDTO.setYears(uploadBase.getYears());
+//                summaryDTO.setMonths(uploadBase.getMonths());
+//                summaryDTO.setDistNo(uploadBase.getDistNo());
+//                summaryDTO.setUserDistNo(user.getTjDistNo());
+//                summaryDTO.setTypeCode(tableType);
 
-                summaryDTO.setYears(uploadBase.getYears());
-                summaryDTO.setMonths(uploadBase.getMonths());
-                summaryDTO.setDistNo(uploadBase.getDistNo());
-                summaryDTO.setUserDistNo(user.getTjDistNo());
-                summaryDTO.setTypeCode(tableType);
+//                SummaryVO summaryVO = summaryCodingRun(summaryDTO);
+//                if(!summaryVO.getRvalue()){
+//                    throw new RuntimeException("上报数据失败");
+//                }
+                verificationGatherUniformity(keyword, user, 1);
+                verificationGatherUniformity(keyword, user, 2);
 
-                SummaryVO summaryVO = summaryCodingRun(summaryDTO);
-                if(!summaryVO.getRvalue()){
-                    throw new RuntimeException("上报数据失败");
-                }
+                //根据上报的等级来进行求和计算是否相同
+//                if (uploadBase.getDistNo().length() == 4) {
+//                    //如果是区 则查询当前区下面所有镇街的汇总数的合计
+//                } else if (uploadBase.getDistNo().length() == 6) {
+//                    //如果是镇街 则查询当前镇街下面所有村的基础数据合计
+//                }
+            } else {
+                //TODO 需要判断最下级的基础数据是否和汇总数一样
+                verificationGatherUniformity(keyword, user, 1);
             }
+        }
+
+        //TODO 按理来说就算是用户多地区号， 根据用户选择操作某个地区，我只需要判断用户操作的地区即可才对
+        //从keyword中获取地区
+        String distNo = keyword.split("_")[1];
+
+        //判断当前操作的地区是否是userDist地区或是其所属地区
+        Boolean accordWith = false;
+        for (String tempDistNo : user.getTjDistNo().split(",")) {
+            //如果当前操作的地区是userDist的地区或下属地区 则符合条件
+            if (tempDistNo.startsWith(distNo)
+                    || distNo.startsWith(tempDistNo)) {
+                accordWith = true;
+                userDistNo = tempDistNo;
+                break;
+            }
+        }
+
+        if (!accordWith) {
+            throw new RuntimeException("当前操作的地区没有权限！");
         }
 
         List<DataProcessNew> dataProcessNews = dataProcessNewManager.listDataProcessNews(dpName, tableType, -1);
@@ -238,7 +272,7 @@ public class BaseDataServiceImpl implements BaseDataService {
 //                    jdbcTemplatePrimary.execute(processSql);
                     String[] idAndDistNo = keyword.split("_");
                     reportOrWithdrawRunForCoding(Integer.valueOf(idAndDistNo[0]), idAndDistNo[1]
-                            , user.getTjDistNo()
+                            , userDistNo
                             , user.getUsername()
                             , "待办事项_上报".equalsIgnoreCase(dpName));
                 }
@@ -327,7 +361,7 @@ public class BaseDataServiceImpl implements BaseDataService {
 //                  jdbcTemplatePrimary.execute(processSql);
                     String[] idAndDistNo = keyword.split("_");
                     reportOrWithdrawRunForCoding(Integer.valueOf(idAndDistNo[0]), idAndDistNo[1]
-                            , user.getTjDistNo()
+                            , userDistNo
                             , user.getUsername()
                             , "待办事项_上报".equalsIgnoreCase(dpName));
                 }
@@ -913,10 +947,16 @@ public class BaseDataServiceImpl implements BaseDataService {
 
 
     /**
-     * 校验上报前上下级汇总数据的一致性
-     * @return
+     * @return 校验结果
      */
-    public boolean verificationGatherUniformity(String keyword, User user){
+    /**
+     * 校验上报前上下级或本级汇总数据和基础数据的一致性
+     * @param keyword     上报数据的keyword
+     * @param user        登陆用户
+     * @param compareType 比较类型 1：本级。 2：上下级
+     * @return            校验结果
+     */
+    public boolean verificationGatherUniformity(String keyword, User user, Integer compareType){
         String[] idAndDistNo = keyword.split("_");
         Integer id = new Integer(idAndDistNo[0]);
         String distNo = idAndDistNo[1];
@@ -942,37 +982,131 @@ public class BaseDataServiceImpl implements BaseDataService {
                 }
             }
 
+            //获取fileitem 字段映射关系map集合
+            // c1 -> 人口数，  c2 -> 面积数。。。
+            Map<String, String> fileItemNameDis = fileItems.stream()
+                    .collect(Collectors.toMap(e -> e.getFieldName().toUpperCase(), e -> {
+                        if (e.getFieldDis().lastIndexOf("|") != -1) {
+                            String[] split = e.getFieldDis().split("\\|");
+                            if (split.length >= 2) {
+                                return "[" + split[split.length - 3] + "]" + ", 序号：[" + split[split.length - 1] + "]";
+                            } else {
+                                return "[" + split[0] + "]" + ", 序号：[" + split[split.length - 1] + "]";
+                            }
+//                            return e.getFieldDis().substring(e.getFieldDis().lastIndexOf("|") + 1);
+                        } else {
+                            return e.getFieldDis();
+                        }
+                    }));
+
+
+            //拼接计算合计的字段
             String fieldNames = fieldList.stream().map(e -> "sum(" + e + ") as " + e).collect(Collectors.joining(", "));
 
             //查询下级数据的汇总
-            String downLevelSql = "select " + fieldNames + " from " + fileList.getTableName()
-                    + " where 1 = 1 and distid like '" + distNo + "%' and distid <> " + "'" + distNo + "' "
-                    + " and years = " + uploadBase.getYears();
+            StringBuffer lowerLevelSql = new StringBuffer();
 
-            String currentLevelSql = "select " + fieldNames + " from " + fileList.getTableName()
-                    + " where 1 = 1 and distid = " + "'" + distNo + "' "
-                    + " and years = " + uploadBase.getYears();
+            //查询当前等级数据的汇总
+            StringBuffer currentLevelSql = new StringBuffer();
 
+            //如果是本级别比较 则是比较基础数据和汇总数 （有汇总数的情况）
+            if (compareType == 1) {
+                lowerLevelSql.append("select " + fieldNames + " from " + fileList.getTableName()
+                        + " where 1 = 1 and distid = '" + distNo + "' "
+                        + " and years = " + uploadBase.getYears());
 
-            if(!CollectionUtils.isEmpty(fileList.getFileItemLinkExs())){
-                //如果有类型则只判断汇总数
-                downLevelSql = downLevelSql + " and lx = '汇总数'";
-                currentLevelSql = currentLevelSql + " and lx = '汇总数'";
+                currentLevelSql.append("select " + fieldNames + " from " + fileList.getTableName()
+                        + " where 1 = 1 and distid = '" + distNo + "' "
+                        + " and years = " + uploadBase.getYears());
+
+            } else {
+                lowerLevelSql.append("select " + fieldNames + " from " + fileList.getTableName()
+                        + " where 1 = 1 and distid like '" + distNo + "%' "
+                        + " and years = " + uploadBase.getYears());
+
+                currentLevelSql.append("select " + fieldNames + " from " + fileList.getTableName()
+                        + " where 1 = 1 and distid like '" + distNo + "%' "
+                        + " and years = " + uploadBase.getYears());
             }
 
-            List<Map<String, Object>> downLevelDataList = jdbcTemplatePrimary.queryForList(downLevelSql);
-            List<Map<String, Object>> currentLevelDataList = jdbcTemplatePrimary.queryForList(currentLevelSql);
 
-            if(CollectionUtils.isEmpty(downLevelDataList) || CollectionUtils.isEmpty(currentLevelDataList)){
+
+            //如果当前报表是有多类型的则加类型条件
+            if(!Objects.isNull(fileList.getFileItemLink())){
+                //如果有类型则只判断汇总数
+                //如果是本级判断
+                lowerLevelSql.append(" and lx != '汇总数' and charindex('汇总数',lxname) = 0");
+                currentLevelSql.append(" and lx = '汇总数'");
+//                if (compareType == 1) {
+//                    lowerLevelSql.append(" and lx != '汇总数' and charindex('汇总数',lxname) = 0");
+//                    currentLevelSql.append(" and lx = '汇总数'");
+//                } else {
+//                    //如果是上下级判断
+//                    lowerLevelSql.append(" and lx = '汇总数'");
+//                    currentLevelSql.append(" and lx = '汇总数'");
+//                }
+            }
+
+            List<Map<String, Object>> lowerLevelDataList = jdbcTemplatePrimary.queryForList(lowerLevelSql.toString());
+            List<Map<String, Object>> currentLevelDataList = jdbcTemplatePrimary.queryForList(currentLevelSql.toString());
+
+            if(CollectionUtils.isEmpty(lowerLevelDataList) || CollectionUtils.isEmpty(currentLevelDataList)){
                 throw new RuntimeException("没有对应的上报基础数据!");
             }
 
-            Map<String, Object> downLevelData = downLevelDataList.get(0);
+            Map<String, Object> lowerLevelData = lowerLevelDataList.get(0);
             Map<String, Object> currentLevelData = currentLevelDataList.get(0);
 
-            for (String s : downLevelData.keySet()) {
-                if(!downLevelData.get(s).equals(currentLevelData.get(s))){
-                    throw new RuntimeException(fileList.getTableDis() + "：未进行汇总稽核!");
+
+            //需要考虑dataProcess配置的更新语句问题
+            StringBuffer dataProcessSql = new StringBuffer();
+            dataProcessSql.append("select processSql from dataProcess where hzRun = 1 and tableType = '")
+                    .append(tableType)
+                    .append("' and years = ")
+                    .append(uploadBase.getYears())
+                    .append(" and (tableName = '")
+                    .append(fileList.getTableName())
+                    .append("' or isnull(tableName,'') = '' or tableName = '')")
+                    .append(" order by orderId");
+            List<String> dataProcessList = jdbcTemplatePrimary.queryForList(dataProcessSql.toString(), String.class);
+
+            //进行dataprocess配置语句的特殊处理
+            List<String> updateFields = new ArrayList<>();
+            if (!CollectionUtils.isEmpty(dataProcessList)) {
+                for (String s : dataProcessList) {
+                    //获取更新的表名称
+                    String updateTable = parseUpdateTable(s.toUpperCase());
+                    List<String> updateTableList = Arrays.asList(updateTable.trim().split(","));
+                    if (updateTableList.contains(fileList.getTableName().toUpperCase())) {
+                        //获取更新的表字段
+                        updateFields.addAll(parseUpdateFields(s.toUpperCase()));
+                    }
+                }
+            }
+
+
+            //需要排除不是手动修改的字段比较
+            for (String s : lowerLevelData.keySet()) {
+                //排除在dataprocess中配置的更新语句更新的字段判断
+                if (updateFields.contains(s.toUpperCase())) {
+                    continue;
+                }
+                //存在更新多个表 字段加表名前缀的情况
+                if (updateFields.contains(fileList.getTableName().toUpperCase() + "." + s.toUpperCase())) {
+                    continue;
+                }
+
+                //进行比较
+                if(!lowerLevelData.get(s).equals(currentLevelData.get(s))){
+                    if (compareType == 1) {
+                        throw new RuntimeException(fileList.getTableDis()
+                                + "：当前级数据存在不一致的情况，请先汇总! 不一致的标题： "
+                                + fileItemNameDis.get(s.toUpperCase()) + "");
+                    } else {
+                        throw new RuntimeException(fileList.getTableDis()
+                                + "：上下级的数据存在不一致的情况，请先汇总! 不一致的标题： "
+                                + fileItemNameDis.get(s.toUpperCase()) + "");
+                    }
                 }
             }
         }
@@ -980,5 +1114,189 @@ public class BaseDataServiceImpl implements BaseDataService {
         return true;
     }
 
+
+    /**
+     * 将执行校验的部分抽取成一个方法
+     * @param dataProcessNew
+     * @param dpName
+     * @param keyword 关键值
+     * @param user
+     * @param userDistNo
+     * @return
+     */
+    public List<InteractiveVO> executeCheck(DataProcessNew dataProcessNew, String dpName, String keyword, User user, String userDistNo) {
+        List<InteractiveVO> interactiveVOS = new ArrayList<>();
+
+        String tableType = user.getTableType().getTableType();
+        String username = user.getUsername();
+
+        String processSql = dataProcessNew.getProcessSql();
+        String alertSql = dataProcessNew.getAlert();
+
+
+        if (dataProcessNew.getAlertType() == 1 || dataProcessNew.getAlertType() == 0) {
+            String fileListSql = " (select * from filelist where 1 = 1 " +
+                    " and (belongDistNo like '{userDistNo}%' or '{userDistNo}' like belongDistNo+'%') ) filelist";
+
+            fileListSql = fileListSql.replace("{userDistNo}", userDistNo);
+
+            processSql = processSql.replace("${keyword}", keyword);
+            processSql = processSql.replace("${_udistNo}", userDistNo);
+            processSql = processSql.replace("${writer}", username);
+            processSql = processSql.replace("${filelist}", fileListSql);
+
+            List<Map<String, Object>> maps = JdbcUtil.queryForMapListGetFirstResultSet(jdbcTemplatePrimary, processSql);
+
+            if (!CollectionUtils.isEmpty(maps)) {
+
+                alertSql = alertSql.replace("${keyword}", keyword);
+                alertSql = alertSql.replace("${_udistNo}", userDistNo);
+                alertSql = alertSql.replace("${writer}", username);
+                alertSql = alertSql.replace("${filelist}", fileListSql);
+
+//                        List<String> strings = jdbcTemplatePrimary.queryForList(alertSql, String.class);
+                List<String> strings = JdbcUtil.queryForListGetFirstResultSet(jdbcTemplatePrimary, alertSql, String.class);
+                if (!CollectionUtils.isEmpty(strings)) {
+
+                    for(String str : strings){
+                        InteractiveVO temp = new InteractiveVO();
+                        temp.setSbFlag(false);
+                        temp.setWindowType(1);
+                        temp.setWindowInfo(str);
+                        interactiveVOS.add(temp);
+                    }
+
+                    return interactiveVOS;
+                }
+            }
+        } else if (dataProcessNew.getAlertType() == 94){
+
+            processSql = processSql.replace("${keyword}", keyword);
+            processSql = processSql.replace("${_udistNo}", userDistNo);
+            processSql = processSql.replace("${writer}", username);
+
+            List<Map<String, Object>> maps = JdbcUtil.queryForMapListGetFirstResultSet(jdbcTemplatePrimary, processSql);
+
+            if (!CollectionUtils.isEmpty(maps)) {
+
+                for(int i = 0; i < maps.size(); i++){
+                    alertSql = alertSql.replace("${c_distno}", (String)maps.get(i).get("c_distno"));
+
+                    //发起网络请求
+                    //存在未处理返回true
+                    //{"rvalue":false,"isException":false}
+                    //进行登录
+                    //登陆头信息
+                    HttpHeaders existNotProcessDataHeaders = new HttpHeaders();
+                    List<String> cookies = new ArrayList<>();
+
+                    // cookie设置
+                    existNotProcessDataHeaders.put(HttpHeaders.COOKIE, cookies);
+
+
+                    //设置请求参数
+                    //因为请求为post请求且content-type 的值为application/x-www-form-urlencoded
+                    //所有必须用下面的集合来传递参数
+                    MultiValueMap<String, Object> existNotProcessDataParam = new LinkedMultiValueMap<>(15);
+
+                    //登陆报文
+                    HttpEntity<MultiValueMap<String, Object>> existNotProcessDataHttpEntity =
+                            new HttpEntity<>(existNotProcessDataParam, existNotProcessDataHeaders);
+
+                    //发起登陆请求
+                    ResponseEntity<String> existNotProcessDataResponse = null;
+
+                    try{
+                        existNotProcessDataResponse = restTemplate.exchange(alertSql
+                                , HttpMethod.GET
+                                , existNotProcessDataHttpEntity
+                                , String.class);
+
+                        Map<String, Object> map = (Map<String, Object>) JSONObject.toBean(JSONObject.fromObject(existNotProcessDataResponse.getBody()), Map.class);
+
+                        //如果请求失败或存在预警的数据 则返回
+                        if(CollectionUtils.isEmpty(map)
+                                || ((Boolean) map.get("rvalue"))
+                                || ((Boolean) map.get("isException"))){
+                            //返回要跳转的连接
+                            InteractiveVO temp = new InteractiveVO();
+                            temp.setWindowType(2);
+                            temp.setWindowInfo(dataProcessNew.getAlertSub());
+                            temp.setSbFlag(false);
+                            interactiveVOS.add(temp);
+
+                            return interactiveVOS;
+                        }
+
+                    }catch (Exception e){
+                        e.printStackTrace();
+                        throw new RuntimeException("校验失败！");
+                    }
+
+                }
+            }
+        }
+
+        return interactiveVOS;
+    }
+
+
+    /**
+     * 解析sql更新语句中所有更新的字段
+     * @param sql 更新语句
+     * @return    更新的字段
+     */
+    public List<String> parseUpdateFields(String sql) {
+        List<String> updateFields = new ArrayList<>();
+
+        // 正则表达式匹配更新字段
+        Pattern pattern = Pattern.compile("SET\\s+(.*?)\\s+WHERE", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(sql);
+
+        if (matcher.find()) {
+            String updateClause = matcher.group(1);
+            String[] fields = updateClause.split(",");
+
+            for (String field : fields) {
+                String trimmedField = field.trim();
+                String fieldName = trimmedField.split("=")[0].trim();
+                updateFields.add(fieldName);
+            }
+        }
+
+        return updateFields;
+    }
+
+
+    /**
+     * 获取更新语句中所更新的表
+     * @param sql 更新语句
+     * @return 更新的表
+     */
+    public String parseUpdateTable(String sql) {
+        String tableName = null;
+
+        // 正则表达式匹配更新表
+        Pattern pattern = Pattern.compile("UPDATE\\s+(.*?)\\s+SET", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(sql);
+
+        if (matcher.find()) {
+            tableName = matcher.group(1);
+        }
+
+        if (tableName == null) {
+            tableName = null;
+            String regex = "UPDATE\\s+(\\w+)";
+            pattern = Pattern.compile(regex);
+            matcher = pattern.matcher(sql);
+
+            if (matcher.find()) {
+                tableName = matcher.group(1);
+            }
+            return tableName;
+        }
+
+        return tableName;
+    }
 
 }

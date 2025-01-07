@@ -2,11 +2,9 @@ package com.bright.common.security;
 
 import com.bright.common.cache.TimeExpiredPoolCache;
 import com.bright.common.properties.CasProperties;
-import com.bright.stats.manager.DistManager;
 import com.bright.stats.pojo.po.second.User;
 import com.bright.stats.pojo.vo.OnlineUserVo;
 import com.bright.stats.util.SessionUnit;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.cas.authentication.CasAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -16,6 +14,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Date;
 
 /**
  * @author: Tz
@@ -51,7 +50,13 @@ public class OnlineUserFilter extends OncePerRequestFilter {
                 onlineUserVo.setBrowser(SessionUnit.getOsAndBrowserInfo2(httpServletRequest));
                 onlineUserVo.setLoginIp(SessionUnit.realIpAddr(httpServletRequest));
                 onlineUserVo.setRoleName(user.getTjRoleName());
-                onlineUserVo.setLoginTime(((CasAuthenticationToken) SecurityContextHolder.getContext().getAuthentication()).getAssertion().getValidFromDate());
+
+
+                if (SecurityContextHolder.getContext().getAuthentication() instanceof CasAuthenticationToken) {
+                    onlineUserVo.setLoginTime(((CasAuthenticationToken) SecurityContextHolder.getContext().getAuthentication()).getAssertion().getValidFromDate());
+                } else {
+                    onlineUserVo.setLoginTime(new Date());
+                }
 
                 TimeExpiredPoolCache.getInstance().put(user.getUsername(), onlineUserVo, 1800000L);
             }

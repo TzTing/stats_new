@@ -5,12 +5,10 @@ import com.bright.common.handler.LogoutRemoveUserHandler;
 import com.bright.common.properties.CasProperties;
 import com.bright.common.security.*;
 import org.jasig.cas.client.session.SingleSignOutFilter;
-import org.jasig.cas.client.validation.Cas20ServiceTicketValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.cas.ServiceProperties;
-import org.springframework.security.cas.authentication.CasAuthenticationProvider;
 import org.springframework.security.cas.web.CasAuthenticationFilter;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
@@ -18,22 +16,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.core.GrantedAuthorityDefaults;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.session.SessionRegistry;
-import org.springframework.security.core.session.SessionRegistryImpl;
-import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
-import org.springframework.security.web.authentication.logout.LogoutHandler;
-import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
-import org.springframework.security.web.authentication.session.SessionFixationProtectionStrategy;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
-
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 
 /**
  * @Author txf
@@ -49,16 +35,25 @@ public class WebSecurityCasConfig extends WebSecurityConfigurerAdapter {
     private CasAuthenticationEntryPointImpl casAuthenticationEntryPoint;
     private CasUserDetailsServiceImpl casUserDetailsService;
 
+
+    private TokenAuthenticationFilter tokenAuthenticationFilter;
+
     @Autowired
-    public WebSecurityCasConfig(CasProperties casProperties, CasAuthenticationEntryPointImpl casAuthenticationEntryPoint, CasUserDetailsServiceImpl casUserDetailsService) {
+    public WebSecurityCasConfig(CasProperties casProperties, CasAuthenticationEntryPointImpl casAuthenticationEntryPoint, CasUserDetailsServiceImpl casUserDetailsService, TokenAuthenticationFilter tokenAuthenticationFilter) {
         this.casProperties = casProperties;
         this.casAuthenticationEntryPoint = casAuthenticationEntryPoint;
         this.casUserDetailsService = casUserDetailsService;
+        this.tokenAuthenticationFilter = tokenAuthenticationFilter;
     }
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
-        http.authorizeRequests() //配置安全策略
+
+
+        http// 添加自定义的基于token的登录过滤器
+                .addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                //配置安全策略
+                .authorizeRequests()
                 .antMatchers("/login", "/send").permitAll()
                 .antMatchers("/static/**").permitAll()
                 .antMatchers("/baseData/getReportSituation").permitAll()

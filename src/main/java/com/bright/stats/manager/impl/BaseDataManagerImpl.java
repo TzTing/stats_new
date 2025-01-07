@@ -18,9 +18,6 @@ import com.bright.stats.pojo.vo.CheckVO;
 import com.bright.stats.pojo.vo.ImportExcelVO;
 import com.bright.stats.pojo.vo.SummaryVO;
 import com.bright.stats.util.*;
-import com.sun.org.apache.xpath.internal.operations.Bool;
-import com.zaxxer.hikari.HikariDataSource;
-import com.zaxxer.hikari.pool.HikariPool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.excelutils.ExcelException;
@@ -42,16 +39,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
-import javax.persistence.*;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.persistence.Query;
 import java.io.File;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.text.DecimalFormat;
 import java.util.Date;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+
+import static com.bright.stats.util.DataConstants.sysparams;
 
 /**
  * @Author txf
@@ -97,11 +96,23 @@ public class BaseDataManagerImpl implements BaseDataManager {
         FileList fileList = fileListManager.getFileList(typeCode, FileListConstant.FILE_LIST_TABLE_TYPE_BASE, tableName, years, months, userDistNo);
         List<FileItem> fileItems = fileList.getFileItems();
         List<String> fileItemCollect = fileItems.stream().map(fileItem -> {
-            //如果是地区名称字段 则需要特殊处理
-            if("distName".equalsIgnoreCase(fileItem.getFieldName())) {
-//                return " case when gradeid = '村' then " +
-//                        "concat((select max(distName) from dist where distid = left(" + tableName + ".distid,6) and years = " + years + "), distname) " +
-//                        "else distName end " + " as " + fileItem.getFieldName();
+
+            //有中山参数才进行处理
+            if (DataConstants.sysparams.get("config_zs_function") != null) {
+                //如果是地区名称字段 则需要特殊处理
+                if("distName".equalsIgnoreCase(fileItem.getFieldName())) {
+                    return " case when gradeid = '村' then " +
+                            "concat((select max(distName) from dist where distid = left(" + tableName + ".distid,6) and years = " + years + "),'-', distname) " +
+                            "else distName end " + " as " + fileItem.getFieldName();
+                }
+
+
+                //如果是地区名称字段 则需要特殊处理
+                if("lxname".equalsIgnoreCase(fileItem.getFieldName())) {
+                    return " case when lxname not like '%汇总数' and len(distid) < 9 then " +
+                            "concat(lxname, '汇总数') " +
+                            "else lxname end " + " as " + fileItem.getFieldName();
+                }
             }
             return fileItem.getFieldName() + " as " + fileItem.getFieldName();
         }).collect(Collectors.toList());
@@ -521,6 +532,15 @@ public class BaseDataManagerImpl implements BaseDataManager {
         Integer id = null;
         for (int i = 0; i < insertData.size(); i++) {
             JSONObject jo = (JSONObject) insertData.get(i);
+            String o = (String) jo.get("DISTNAME");
+            if (StringUtils.isNotBlank(o)) {
+                String[] split = o.split("-");
+                if (split.length > 1) {
+                    jo.put("DISTNAME", split[split.length - 1]);
+                } else {
+                    jo.put("DISTNAME", split[0]);
+                }
+            }
 
             id = (Integer) jo.get("ID");
 
@@ -600,6 +620,15 @@ public class BaseDataManagerImpl implements BaseDataManager {
             public void setValues(PreparedStatement arg0, int arg1) throws SQLException {
                 JSONObject jo = (JSONObject) tempUpdateData.get(arg1);
 
+                String o = (String) jo.get("DISTNAME");
+                if (StringUtils.isNotBlank(o)) {
+                    String[] split = o.split("-");
+                    if (split.length > 1) {
+                        jo.put("DISTNAME", split[split.length - 1]);
+                    } else {
+                        jo.put("DISTNAME", split[0]);
+                    }
+                }
 
                 Object[] parameters = new Object[fileItems.size() + 1];
                 for (int j = 0; j < fileItems.size(); j++) {

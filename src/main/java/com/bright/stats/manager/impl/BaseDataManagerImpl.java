@@ -4102,7 +4102,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
             insert.append(")");
 
             if(isHzsOtherLx){
-                insert.append(" and (select count(*) from ")
+                insert.append(" and ((select count(*) from ")
                         .append(tableName)
                         .append(" bb where bb.years = ")
                         .append(years);
@@ -4111,11 +4111,43 @@ public class BaseDataManagerImpl implements BaseDataManager {
                     insert.append(" and bb.months = ").append(months);
                 }
 
-                insert.append(" and bb.lx = ")
-                        .append(tableName)
-                        .append(".lx and bb.distId = ")
-                        .append(tableName)
-                        .append(".distId) > 1");
+                //中山添加功能
+                if (("rep905".equalsIgnoreCase(tableName) || "rep906".equalsIgnoreCase(tableName))
+                        && (DataConstants.sysparams.get("config_zs_function") != null)) {
+                    insert.append(" and bb.lx = ")
+                            .append(tableName)
+                            .append(".lx and bb.distId = ")
+                            .append(tableName)
+                            .append(".distId and len(distId) >= ")
+                            .append(getDistAllGrade().get(getDistAllGrade().size() - 1))
+                            .append(" ) >= 1");
+
+
+                    insert.append(" or (select count(*) from ")
+                            .append(tableName)
+                            .append(" bb where bb.years = ")
+                            .append(years);
+
+                    if(months != null && months != 0){
+                        insert.append(" and bb.months = ").append(months);
+                    }
+
+                    insert.append(" and bb.lx = ")
+                            .append(tableName)
+                            .append(".lx and bb.distId = ")
+                            .append(tableName)
+                            .append(".distId and len(distId) < ")
+                            .append(getDistAllGrade().get(getDistAllGrade().size() - 1))
+                            .append(" ) > 1 )");
+
+                }  else {
+                    insert.append(" and bb.lx = ")
+                            .append(tableName)
+                            .append(".lx and bb.distId = ")
+                            .append(tableName)
+                            .append(".distId) > 1)");
+                }
+
             }
 
             if(isHzsOtherLx){

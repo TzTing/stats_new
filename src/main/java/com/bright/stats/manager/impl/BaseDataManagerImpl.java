@@ -3552,11 +3552,12 @@ public class BaseDataManagerImpl implements BaseDataManager {
                                 deleteSql.append(" and months = ").append(months);
                             }
 
+
                             deleteSql.append(" and distId = ")
                                     .append(fileListTableName)
                                     .append(".distId and aa.lx=")
                                     .append(fileListTableName)
-                                    .append(".lx) > 1))");
+                                    .append(".lx) >= 1))");
 
                         } else {
                             deleteSql.append(" and ((select count(*) from ")

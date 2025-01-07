@@ -3618,6 +3618,69 @@ public class BaseDataManagerImpl implements BaseDataManager {
                                 sumBaseData(sumBaseDataDTO);
                             }
                         }
+
+
+                        //自定义配置处理类型
+                        List<LxSummary> lxSummaryListByTypeCode = lxSummaryManager.findLxSummaryListByTypeCode(typeCode);
+                        for (LxSummary lxSummary : lxSummaryListByTypeCode) {
+
+                            List<String> list = Arrays.asList(lxSummary.getTables().split(","));
+                            if (!list.contains(fileListTableName)) {
+                                continue;
+                            }
+
+                            sumBaseDataDTO.setDistIdLen(0);
+                            sumBaseDataDTO.setDistIdType(0);
+                            sumBaseDataDTO.setLx(lxSummary.getSummaryName());
+                            sumBaseDataDTO.setIsHzsOtherLx(true);
+                            sumBaseDataDTO.setParentLx("");
+
+                            if(StringUtils.isBlank(distNo)) {
+                                sumOffBeat(sumBaseDataDTO);
+                                sumBaseDataDTO.setIsHzsOtherLx(false);
+                                sumOffBeat(sumBaseDataDTO);
+                            } else {
+                                sumBaseData(sumBaseDataDTO);
+                                sumBaseDataDTO.setIsHzsOtherLx(false);
+                                sumBaseData(sumBaseDataDTO);
+                            }
+
+                        }
+//                        if(isExistsLx
+//                                && ("rep905".equalsIgnoreCase(fileListTableName)
+//                                || "rep906".equalsIgnoreCase(fileListTableName))){
+//
+//                            sumBaseDataDTO.setDistIdLen(0);
+//                            sumBaseDataDTO.setDistIdType(0);
+//                            sumBaseDataDTO.setLx("村级汇总数");
+//                            sumBaseDataDTO.setIsHzsOtherLx(true);
+//                            sumBaseDataDTO.setParentLx("");
+//
+//                            if(StringUtils.isBlank(distNo)){
+//                                sumOffBeat(sumBaseDataDTO);
+//                                sumBaseDataDTO.setIsHzsOtherLx(false);
+//                                sumOffBeat(sumBaseDataDTO);
+//                            }else{
+//                                sumBaseData(sumBaseDataDTO);
+//                                sumBaseDataDTO.setIsHzsOtherLx(false);
+//                                sumBaseData(sumBaseDataDTO);
+//                            }
+//
+//                            sumBaseDataDTO.setDistIdLen(0);
+//                            sumBaseDataDTO.setDistIdType(0);
+//                            sumBaseDataDTO.setLx("组级汇总数");
+//                            sumBaseDataDTO.setIsHzsOtherLx(true);
+//                            sumBaseDataDTO.setParentLx("");
+//                            if(StringUtils.isBlank(distNo)){
+//                                sumOffBeat(sumBaseDataDTO);
+//                                sumBaseDataDTO.setIsHzsOtherLx(false);
+//                                sumOffBeat(sumBaseDataDTO);
+//                            }else{
+//                                sumBaseData(sumBaseDataDTO);
+//                                sumBaseDataDTO.setIsHzsOtherLx(false);
+//                                sumBaseData(sumBaseDataDTO);
+//                            }
+//                        }
                     }
                 }
 
@@ -3704,6 +3767,17 @@ public class BaseDataManagerImpl implements BaseDataManager {
         Boolean linkDist = sumBaseDataDTO.getLinkDist();
         String parentLx = sumBaseDataDTO.getParentLx();
 
+//        List<String> lxList = Arrays.asList("汇总数", "村级汇总数", "组级汇总数");
+        List<String> lxList = new ArrayList<String>();
+        lxList.add("汇总数");
+
+        //如果有配置额外的类型， 则对额外的类型进行处理
+        List<LxSummary> lxSummaryList = lxSummaryManager.findLxSummaryListByTypeCode(tableType);
+        if (!CollectionUtils.isEmpty(lxSummaryList)) {
+            List<String> collect = lxSummaryList.stream().map(LxSummary::getSummaryName).collect(Collectors.toList());
+            lxList.addAll(collect);
+        }
+
         StringBuilder insert = new StringBuilder();
         insert.append("insert into ").append(tableName).append(" (years, ");
 
@@ -3721,7 +3795,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
         }
         insert.append("'否' as saveFlag,'是' as sumFlag,'否' as balFlag,");
 
-        if(!"汇总数".equalsIgnoreCase(lx)){
+        if(!lxList.contains(lx)){
             insert.append(" left(distId, ")
                     .append(distIdInt)
                     .append(") as distId, (select top 1 distName from dist where years = ")
@@ -3777,7 +3851,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
                     insert.append("|| lx");
                 }
 
-                insert.append("|| '汇总数' as lxname,(select lxid from lxorder where typeCode='")
+                insert.append("|| '" + lx + "' as lxname,(select lxid from lxorder where typeCode='")
                         .append(tableType)
                         .append("' and years = ")
                         .append(years)
@@ -3815,7 +3889,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
 
             if(StringUtils.isBlank(parentLx)
                     && !isHzsOtherLx
-                    && "汇总数".equalsIgnoreCase(lx)){
+                    && lxList.contains(lx)){
                 insert.append("  and lx not in (select lx from lxorder where years = ")
                         .append(years)
                         .append(" and typeCode = '")
@@ -3827,7 +3901,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
         insert.append(" and years = ").append(years);
 
 
-        if(!"汇总数".equalsIgnoreCase(lx)){
+        if(!lxList.contains(lx)){
             insert.append(" and len(distId) = ");
             if(distIdType == 0){
                 insert.append(distIdInt);
@@ -3850,7 +3924,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
             }
         }
 
-        if(StringUtils.isNotBlank(lx) && !"汇总数".equalsIgnoreCase(lx) && isExistsLx){
+        if(StringUtils.isNotBlank(lx) && !lxList.contains(lx) && isExistsLx){
             insert.append(" and lx = '").append(lx).append("'");
         }
 
@@ -3858,7 +3932,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
             insert.append(" and months = ").append(months);
         }
 
-        if(!"汇总数".equalsIgnoreCase(lx)){
+        if(!lxList.contains(lx)){
             if(isExistsLx){
                 insert.append(" and not exists ( select concat(distId, lx) from ")
                         .append(tableName);
@@ -4019,6 +4093,45 @@ public class BaseDataManagerImpl implements BaseDataManager {
                 insert.append(" and lx not in (select lx from lxorder where not (parentLx is null or parentLx=''))");
             }
 
+
+
+            List<LxSummary> collect = lxSummaryList.stream()
+                    .filter(e -> e.getSummaryName().equalsIgnoreCase(lx))
+                    .collect(Collectors.toList());
+            //如果有对应的类型
+            if (!CollectionUtils.isEmpty(collect)) {
+                //对特定的类型数据进行汇总
+                LxSummary lxSummary = collect.get(0);
+                List<String> list = Arrays.asList(lxSummary.getSummaryFormula().split("\\+"));
+                String lxFormula = list.stream().map(e -> "'" + e + "'").collect(Collectors.joining(","));
+                insert.append(" and lxid in (select lxid from lxorder where years=")
+                        .append(years)
+                        .append(" and typeCode = '")
+                        .append(tableType)
+                        .append("' and lx in ("
+                                + lxFormula +
+                                ") ")
+                        .append(")");
+            }
+
+//            if ("村级汇总数".equalsIgnoreCase(lx)) {
+//                insert.append(" and lxid in (select lxid from lxorder where years=")
+//                        .append(years)
+//                        .append(" and typeCode = '")
+//                        .append(tableType)
+//                        .append("' and lx in ('经联社', '联社公司', '村委会') ")
+//                        .append(")");
+//            }
+//
+//            if ("组级汇总数".equalsIgnoreCase(lx)) {
+//                insert.append(" and lxid in (select lxid from lxorder where years=")
+//                        .append(years)
+//                        .append(" and typeCode = '")
+//                        .append(tableType)
+//                        .append("' and lx in ('经济社', '经济社公司', '村小组') ")
+//                        .append(")");
+//            }
+
             insert.append(" group by distId,distName ");
 
             if(isHzsOtherLx){
@@ -4058,6 +4171,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
      String parentLx = sumBaseDataDTO.getParentLx();
 
 
+        List<String> lxList = Arrays.asList("汇总数", "村级汇总数", "组级汇总数");
 
         StringBuilder insert = new StringBuilder();
         StringBuilder colSql = new StringBuilder();
@@ -4086,7 +4200,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
         sql.append("'否' as saveFlag,'是' as sumFlag,'否' as balFlag, ");
 
 
-        if(!"汇总数".equalsIgnoreCase(lx)){
+        if(!lxList.contains(lx)){
             colSql.append("distid,distName");
             sql.append("(select distid from dist where years=")
                     .append(years)
@@ -4170,7 +4284,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
         colSql.append(" , ").append(sumColumns).append(" from (");
         sql.append(" , ").append(sumColumns).append(" from ( ").append(tableName);
 
-        if ("汇总数".equalsIgnoreCase(lx)){
+        if (lxList.contains(lx)){
             sql.append(" left join ");
 
             if(isExistsLx){
@@ -4234,7 +4348,7 @@ public class BaseDataManagerImpl implements BaseDataManager {
                         .append("' and parentLx is not null and parentLx<>''))");
             }
 
-            if (StringUtils.isBlank(parentLx) && !isHzsOtherLx && "汇总数".equalsIgnoreCase(lx)){
+            if (StringUtils.isBlank(parentLx) && !isHzsOtherLx && lxList.contains(lx)){
                 sql.append(" and lx not in (select lx from lxorder where years=")
                         .append(years)
                         .append(" and typeCode='")

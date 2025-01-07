@@ -16,7 +16,7 @@ alter table excelTemplates add belongDistNo varchar(64)
 --下拉选项格式
 alter table fileItem add formatterSelect varchar(128)
 
-CREATE TABLE "ANALYSIS_GZ_NEW"."mq_message"
+CREATE TABLE "mq_message"
 (
 "id" INTEGER IDENTITY(1, 1) NOT NULL,
 "keyword" VARCHAR2(255),
@@ -63,7 +63,7 @@ COMMENT ON COLUMN "ANALYSIS_GZ_NEW"."mq_message"."updated_time" IS '更新时间
 COMMENT ON COLUMN "ANALYSIS_GZ_NEW"."mq_message"."username" IS '用户名';
 COMMENT ON COLUMN "ANALYSIS_GZ_NEW"."mq_message"."years" IS '年份';
 
-CREATE TABLE "ANALYSIS_GZ_NEW"."operation_log"
+CREATE TABLE "operation_log"
 (
 "id" INT IDENTITY(1, 1) NOT NULL,
 "ope_user" VARCHAR2(255),
@@ -109,7 +109,7 @@ COMMENT ON COLUMN "ANALYSIS_GZ_NEW"."operation_log"."req_uri" IS '请求地址';
 
 
 --2023/01/13
-CREATE TABLE "ANALYSIS_GZ_NEW"."notes"
+CREATE TABLE "notes"
 (
 "id" INT IDENTITY(15, 1) NOT NULL,
 "description" VARCHAR(50),
@@ -143,3 +143,26 @@ alter table tableType add showName varchar(500)
 alter table tableType add oldProjectUrl varchar(255)
 --首页模式的排序
 alter table tableType add sortNum int
+
+--2024/12/25
+--添加类型配置
+CREATE TABLE "ANALYSIS_GZ_NEW"."lx_summary"
+(
+"id" INTEGER IDENTITY(1, 1) NOT NULL,
+"type_code" VARCHAR(50),
+"summary_name" VARCHAR(50),
+"summary_formula" VARCHAR(512),
+"visible" BIT,
+"tables" VARCHAR(512),
+NOT CLUSTER PRIMARY KEY("id")) STORAGE(ON "MAIN", CLUSTERBTR) ;
+
+COMMENT ON COLUMN "ANALYSIS_GZ_NEW"."lx_summary"."summary_formula" IS '汇总公式，如：经济社+经济社公司';
+COMMENT ON COLUMN "ANALYSIS_GZ_NEW"."lx_summary"."summary_name" IS '汇总的名称，如：村级汇总数';
+COMMENT ON COLUMN "ANALYSIS_GZ_NEW"."lx_summary"."tables" IS '需要添加的表列表，如：rep901,rep902';
+COMMENT ON COLUMN "ANALYSIS_GZ_NEW"."lx_summary"."type_code" IS '模式名';
+
+
+
+--中山特殊处理
+insert into "ANALYSIS_GZ_NEW"."bs_config" ("type","valuename","express","detail","datatype","chkflag") values ('层级统计', 'config_zs_function', '1', '中山特殊功能', 'C', 1);
+
